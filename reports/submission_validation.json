@@ -1,0 +1,12 @@
+{
+  "official": {
+    "ran": true,
+    "returncode": 0,
+    "stdout": "PASS\nmatching rows: 400; test S1: 400; S2: 657; S3: 218\n",
+    "stderr": "",
+    "pass": null,
+    "pass_": true
+  },
+  "internal_pass": true,
+  "internal_problems": []
+}

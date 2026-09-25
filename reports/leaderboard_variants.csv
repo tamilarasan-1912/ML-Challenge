@@ -1,0 +1,6 @@
+variant,macro_f05,threshold,threshold_s2,threshold_s3,margin,top_only,max_matches,note
+A conservative,0.999861,0.4,,,0.0,False,0,higher threshold -> fewer false merges
+B balanced,0.999861,0.3,,,0.0,False,0,validated optimum
+C adaptive (lower thr),0.999861,0.3,,,0.0,False,0,"more recall, more false merges"
+D best-validation,0.999861,0.3,,,0.0,False,0,"identical to B, recorded for the 5-submission budget"
+E top-only,0.984223,0.3,,,0.0,True,0,at most one match per entity

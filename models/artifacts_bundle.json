@@ -1,0 +1,191 @@
+{
+  "feature_names": [
+    "name_exact",
+    "name_heavy_exact",
+    "name_core_exact",
+    "name_ratio",
+    "name_jaro_winkler",
+    "name_partial_ratio",
+    "name_token_sort_ratio",
+    "name_token_set_ratio",
+    "name_partial_token_set_ratio",
+    "name_core_token_set_ratio",
+    "name_prefix_sim",
+    "name_suffix_sim",
+    "name_len_diff",
+    "name_len_ratio",
+    "name_tok_count_diff",
+    "name_common_tokens",
+    "name_token_coverage",
+    "name_core_token_coverage",
+    "name_ngram_jaccard",
+    "addr_exact",
+    "addr_heavy_exact",
+    "addr_ratio",
+    "addr_token_sort_ratio",
+    "addr_token_set_ratio",
+    "addr_token_coverage",
+    "addr_len_diff",
+    "addr_len_ratio",
+    "addr_num_overlap",
+    "house_number_match",
+    "postal_match",
+    "addr_digit_overlap",
+    "addr_first_token_match",
+    "addr_last_token_match",
+    "addr_completeness_agree",
+    "addr_missing_s1",
+    "addr_missing_cand",
+    "name_x_addr",
+    "name_addr_min",
+    "name_addr_max",
+    "name_high_addr_high",
+    "name_high_number_match",
+    "name_high_postal_match",
+    "name_medium_addr_high",
+    "name_present_both",
+    "addr_present_both",
+    "country_equal",
+    "country_conflict",
+    "country_present_both",
+    "name_freq_log_s1",
+    "name_freq_log_cand",
+    "name_is_rare",
+    "core_name_freq_log_cand",
+    "addr_freq_log_cand",
+    "rare_name_token_count_s1",
+    "rare_addr_token_count_s1",
+    "idf_token_overlap",
+    "token_overlap",
+    "retrieved_by_exact_name",
+    "retrieved_by_core_name",
+    "retrieved_by_exact_address",
+    "retrieved_by_name_housenumber",
+    "retrieved_by_postal_name",
+    "retrieved_by_rare_name_token",
+    "retrieved_by_rare_addr_token",
+    "retrieved_by_char_ngram",
+    "retrieved_by_token_overlap",
+    "retrieved_by_country_approx",
+    "number_of_blocks",
+    "name_retrieval_rank",
+    "ngram_retrieval_rank",
+    "cand_is_s3"
+  ],
+  "decision": {
+    "threshold": 0.3,
+    "threshold_s2": null,
+    "threshold_s3": null,
+    "high_conf": 0.995,
+    "margin": 0.0,
+    "top_only": false,
+    "max_matches_per_entity": 0,
+    "require_candidate": true
+  },
+  "blocking": {
+    "name_token_max_postings": 20000,
+    "addr_token_max_postings": 20000,
+    "ngram_max_postings": 8000,
+    "rare_name_token_df": 400,
+    "rare_addr_token_df": 400,
+    "min_token_len": 3,
+    "ngram_n": 4,
+    "ngram_max_grams": 40,
+    "max_candidates_per_block": 200,
+    "min_shared_tokens": 1,
+    "postal_max_postings": 20000,
+    "housenumber_max_postings": 20000
+  },
+  "mining": {
+    "keep_very_hard": true,
+    "keep_hard": true,
+    "hard_neg_cap_ratio": 20.0,
+    "medium_sample_rate": 0.35,
+    "easy_sample_rate": 0.05,
+    "seed": 42
+  },
+  "calibrator": {
+    "kind": "isotonic"
+  },
+  "best_iteration": 67,
+  "train_fraction": 0.8,
+  "seed": 42,
+  "metrics": {
+    "macro_f05": 0.9998611111111111,
+    "precision": 0.9963369963369964,
+    "recall": 1.0,
+    "n_entities": 1200,
+    "n_entities_with_gt": 141,
+    "singleton_score": 1.0,
+    "match_score": 0.9988179669030733,
+    "tp": 272,
+    "fp": 1,
+    "fn": 0,
+    "n_predicted_pairs": 273,
+    "by_source": {
+      "S2": {
+        "precision": 0.9930555555555556,
+        "recall": 1.0,
+        "f05": 0.9944367176634215,
+        "tp": 143,
+        "fp": 1,
+        "fn": 0
+      },
+      "S3": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f05": 1.0,
+        "tp": 129,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "by_country": {
+      "united states": {
+        "macro_f05": 0.9997427983539096,
+        "n": 648
+      },
+      "india": {
+        "macro_f05": 1.0,
+        "n": 552
+      }
+    }
+  },
+  "candidate_recall": {
+    "n_s1": 1200,
+    "n_pos_pairs": 1300,
+    "n_pos_pairs_found": 1300,
+    "candidate_recall": 1.0,
+    "n_candidates": 632542,
+    "reduction_ratio": 0.7899926958831341,
+    "mean_candidates": 527.1183333333333,
+    "median_candidates": 518.0,
+    "p95_candidates": 662.05,
+    "p99_candidates": 707.01,
+    "max_candidates": 721.0,
+    "by_source": {
+      "S2": {
+        "found": 649,
+        "total": 649,
+        "recall": 1.0
+      },
+      "S3": {
+        "found": 651,
+        "total": 651,
+        "recall": 1.0
+      }
+    },
+    "by_country": {
+      "united states": {
+        "found": 714,
+        "total": 714,
+        "recall": 1.0
+      },
+      "india": {
+        "found": 586,
+        "total": 586,
+        "recall": 1.0
+      }
+    }
+  }
+}

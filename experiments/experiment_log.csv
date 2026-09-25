@@ -1,0 +1,5 @@
+experiment_id,timestamp,feature_version,blocking_version,model_version,train_size,validation_size,candidate_recall,candidate_reduction_ratio,candidate_count_mean,threshold,S2_threshold,S3_threshold,macro_f05,precision,recall,singleton_score,false_positive_count,false_negative_count,runtime,peak_memory,notes
+train_1790350170,2026-09-25T15:29:30,v1_n71,multiblock_v1_10blocks,lightgbm_v1,21588,124779,1.0,0.79212185,521.7742,0.3,,,0.999861,0.996337,1.0,1.0,1,0,33.08,1315500032,calib=isotonic;mining_sel=21588
+train_1790351081,2026-09-25T15:44:41,v1_n71,multiblock_v1_10blocks,lightgbm_v1,21588,127030,1.0,0.78901461,529.5733,0.3,,,0.999861,0.996337,1.0,1.0,1,0,33.17,1332047872,calib=isotonic;mining_sel=21588
+train_1790351284,2026-09-25T15:48:04,v1_n71,multiblock_v1_10blocks,lightgbm_v1,21588,126426,1.0,0.78919057,529.1317,0.3,,,0.999861,0.996337,1.0,1.0,1,0,33.14,1332428800,calib=isotonic;mining_sel=21588
+train_1790351482,2026-09-25T15:51:22,v1_n71,multiblock_v1_10blocks,lightgbm_v1,21588,125928,1.0,0.7899927,527.1183,0.3,,,0.999861,0.996337,1.0,1.0,1,0,33.32,1327566848,calib=isotonic;mining_sel=21588

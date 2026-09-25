@@ -1,0 +1,81 @@
+# Amazon ML Challenge 2026 - Business Entity Resolution configuration
+# Every value here can be overridden on the CLI.
+
+seed: 42
+
+paths:
+  data_root: null            # null -> auto-detect; else path to student_resource
+  output_dir: output
+  reports_dir: reports
+  models_dir: models
+  experiments_dir: experiments
+  artifacts_dir: artifacts
+
+profile:
+  sample_rows: null          # null -> full files
+
+normalization:
+  name_max_chars: 400
+  addr_max_chars: 400
+
+blocking:
+  name_token_max_postings: 20000
+  addr_token_max_postings: 20000
+  ngram_max_postings: 8000
+  rare_name_token_df: 400
+  rare_addr_token_df: 400
+  min_token_len: 3
+  ngram_n: 4
+  ngram_max_grams: 40
+  max_candidates_per_block: 200
+  min_shared_tokens: 1
+  postal_max_postings: 20000
+
+split:
+  train_fraction: 0.8        # entity-level split
+  n_folds: 1                 # 1 -> single split; >1 -> grouped CV
+
+hard_negative_mining:
+  keep_very_hard: true
+  keep_hard: true
+  hard_neg_cap_ratio: 20.0
+  medium_sample_rate: 0.35
+  easy_sample_rate: 0.05
+
+training:
+  num_leaves: 96
+  max_depth: -1
+  learning_rate: 0.05
+  n_estimators: 3000
+  min_child_samples: 20
+  subsample: 0.9
+  subsample_freq: 1
+  colsample_bytree: 0.9
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  early_stopping_rounds: 150
+  n_jobs: -1
+
+tuning:
+  enabled: false
+  n_trials: 25
+  time_budget_s: 1800
+
+decision:
+  threshold: 0.5
+  threshold_s2: null
+  threshold_s3: null
+  high_conf: 0.995
+  margin: 0.0
+  top_only: false
+  max_matches_per_entity: 0
+
+optimization:
+  fine_threshold: true
+  optimize_source_thresholds: true
+  optimize_ambiguity: true
+  calibrate: true
+  consistency: false
+
+submission:
+  team_name: team

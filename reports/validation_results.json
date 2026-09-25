@@ -1,0 +1,53 @@
+{
+  "eval": {
+    "macro_f05": 0.9998611111111111,
+    "precision": 0.9963369963369964,
+    "recall": 1.0,
+    "n_entities": 1200,
+    "n_entities_with_gt": 141,
+    "singleton_score": 1.0,
+    "match_score": 0.9988179669030733,
+    "tp": 272,
+    "fp": 1,
+    "fn": 0,
+    "n_predicted_pairs": 273,
+    "by_source": {
+      "S2": {
+        "precision": 0.9930555555555556,
+        "recall": 1.0,
+        "f05": 0.9944367176634215,
+        "tp": 143,
+        "fp": 1,
+        "fn": 0
+      },
+      "S3": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f05": 1.0,
+        "tp": 129,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "by_country": {
+      "united states": {
+        "macro_f05": 0.9997427983539096,
+        "n": 648
+      },
+      "india": {
+        "macro_f05": 1.0,
+        "n": 552
+      }
+    }
+  },
+  "decision": {
+    "threshold": 0.3,
+    "threshold_s2": null,
+    "threshold_s3": null,
+    "high_conf": 0.995,
+    "margin": 0.0,
+    "top_only": false,
+    "max_matches_per_entity": 0,
+    "require_candidate": true
+  }
+}
