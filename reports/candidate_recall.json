@@ -1,0 +1,37 @@
+{
+  "n_s1": 1200,
+  "n_pos_pairs": 1300,
+  "n_pos_pairs_found": 1300,
+  "candidate_recall": 1.0,
+  "n_candidates": 632542,
+  "reduction_ratio": 0.7899926958831341,
+  "mean_candidates": 527.1183333333333,
+  "median_candidates": 518.0,
+  "p95_candidates": 662.05,
+  "p99_candidates": 707.01,
+  "max_candidates": 721.0,
+  "by_source": {
+    "S2": {
+      "found": 649,
+      "total": 649,
+      "recall": 1.0
+    },
+    "S3": {
+      "found": 651,
+      "total": 651,
+      "recall": 1.0
+    }
+  },
+  "by_country": {
+    "united states": {
+      "found": 714,
+      "total": 714,
+      "recall": 1.0
+    },
+    "india": {
+      "found": 586,
+      "total": 586,
+      "recall": 1.0
+    }
+  }
+}

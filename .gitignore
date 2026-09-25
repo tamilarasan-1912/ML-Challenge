@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Models & generated artefacts (regenerate with run_pipeline.py)
+models/*.txt
+models/*.pkl
+artifacts/
+experiments/tuning_results.csv
+
+# Dev / synthetic data and logs
+dev/synthetic/
+dev/*.log
+
+# Submission packages
+*_submission.zip
+
+# OS noise
+.DS_Store
+__MACOSX/
+._*

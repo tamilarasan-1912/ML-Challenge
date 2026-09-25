@@ -1,0 +1,423 @@
+# Data Profile
+
+Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
+
+## Resolved files
+- train S1: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
+- train S2: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
+- train S3: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
+- test S1: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
+- test S2: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
+- test S3: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
+
+## Train sources
+### train S1
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
+- size: 101,134 bytes
+- rows: 1,200
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 1200
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1200
+    - min_len: 8
+    - max_len: 8
+    - mean_len: 8.0
+    - median_len: 8.0
+    - p95_len: 8.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S1': 1200}
+- column `business_name`:
+    - n: 1200
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1052
+    - min_len: 9
+    - max_len: 42
+    - mean_len: 22.761666666666667
+    - median_len: 22.0
+    - p95_len: 32.0
+    - total_tokens: 4123
+    - mean_tokens: 3.4358333333333335
+    - max_tokens: 6
+    - top_tokens: ltd:285, company:166, corp:161, international:150, pvt:146, llc:144, inc:140, enterprises:111, general:110, stores:110, motors:106, logistics:102
+    - rare_tokens: sharma:39, martin:40, iyer:46, kumar:47, miller:47, bernard:49, rao:52, brown:52, nair:57, patel:57, johnson:58, smith:61
+    - vocab_size: 46
+- column `business_address`:
+    - n: 1200
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1198
+    - min_len: 33
+    - max_len: 51
+    - mean_len: 40.155833333333334
+    - median_len: 39.0
+    - p95_len: 50.0
+    - total_tokens: 7791
+    - mean_tokens: 6.4925
+    - max_tokens: 9
+    - top_tokens: ave,:648, united:648, states:648, street,:552, india:552, rue:236, lake:123, de:119, la:119, paix:119, nehru:119, victor:117
+    - rare_tokens: 772092,:1, 671:1, 959458,:1, 995:1, 910456,:1, 834870,:1, 400:1, 306:1, 781934,:1, 355650,:1, 890692,:1, 118088,:1
+    - vocab_size: 1283
+    - numeric_token_total: 1752
+    - records_with_postal_like: 552
+- column `country`:
+    - n: 1200
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 2
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 9.32
+    - median_len: 13.0
+    - p95_len: 13.0
+    - distribution: {'united states': 648, 'india': 552}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 1200}]
+- name records with non-ASCII: 0
+- name records with punctuation: 0
+
+### train S2
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
+- size: 158,404 bytes
+- rows: 1,859
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 1859
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1859
+    - min_len: 9
+    - max_len: 9
+    - mean_len: 9.0
+    - median_len: 9.0
+    - p95_len: 9.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S2': 1859}
+- column `business_name`:
+    - n: 1859
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1673
+    - min_len: 9
+    - max_len: 45
+    - mean_len: 22.718128025820334
+    - median_len: 22.0
+    - p95_len: 33.0
+    - total_tokens: 6374
+    - mean_tokens: 3.428725121032813
+    - max_tokens: 6
+    - top_tokens: ltd:386, international:219, pvt:215, corp:211, company:204, inc:194, llc:189, foods:182, co:174, logistics:163, general:162, stores:160
+    - rare_tokens: internation:1, food:1, solut:1, enterprise:1, electroni:1, electron:1, trader:1, phar:1, industrie:1, logisti:1, motor:2, mot:2
+    - vocab_size: 78
+- column `business_address`:
+    - n: 1859
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 1838
+    - min_len: 28
+    - max_len: 56
+    - mean_len: 40.015061861215706
+    - median_len: 39.0
+    - p95_len: 50.0
+    - total_tokens: 12289
+    - mean_tokens: 6.610543302850995
+    - max_tokens: 11
+    - top_tokens: united:1034, states:1034, ave,:835, india:825, street,:668, rue:372, ,:198, de:193, la:193, paix:193, lake:191, park:181
+    - rare_tokens: 891678,:1, 671:1, 959458:1, 564:1, 347126,:1, 583049,:1, 400:1, 355504,:1, 331151,:1, 267712,:1, 410:1, 280:1
+    - vocab_size: 1650
+    - numeric_token_total: 2684
+    - records_with_postal_like: 825
+- column `country`:
+    - n: 1859
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 2
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 9.449704142011834
+    - median_len: 13.0
+    - p95_len: 13.0
+    - distribution: {'united states': 1034, 'india': 825}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 1859}]
+- name records with non-ASCII: 0
+- name records with punctuation: 106
+
+### train S3
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
+- size: 55,201 bytes
+- rows: 651
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 651
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 651
+    - min_len: 9
+    - max_len: 9
+    - mean_len: 9.0
+    - median_len: 9.0
+    - p95_len: 9.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S3': 651}
+- column `business_name`:
+    - n: 651
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 639
+    - min_len: 6
+    - max_len: 44
+    - mean_len: 22.65284178187404
+    - median_len: 22.0
+    - p95_len: 34.0
+    - total_tokens: 2231
+    - mean_tokens: 3.4270353302611367
+    - max_tokens: 6
+    - top_tokens: ltd:87, pvt:71, corp:67, foods:62, blue:58, enterprises:57, inc:56, pharma:56, general:55, motors:55, industries:55, co:54
+    - rare_tokens: solut:1, solutio:1, solution:1, trade:1, tradin:1, moto:1, st:1, electro:1, fo:1, mo:1, foo:1, dub:1
+    - vocab_size: 88
+- column `business_address`:
+    - n: 651
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 629
+    - min_len: 29
+    - max_len: 54
+    - mean_len: 39.678955453149
+    - median_len: 39.0
+    - p95_len: 50.0
+    - total_tokens: 4395
+    - mean_tokens: 6.751152073732719
+    - max_tokens: 11
+    - top_tokens: united:357, states:357, india:294, ,:190, ave,:168, street,:134, rue:117, ave:79, hill:76, nehru:69, market:67, de:65
+    - rare_tokens: 683:1, 772092,:1, 995:1, 400:1, 516:1, 46:1, 649247,:1, 78:1, 265006,:1, 626692:1, 626692,:1, 994:1
+    - vocab_size: 710
+    - numeric_token_total: 945
+    - records_with_postal_like: 294
+- column `country`:
+    - n: 651
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 2
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 9.387096774193548
+    - median_len: 13.0
+    - p95_len: 13.0
+    - distribution: {'united states': 357, 'india': 294}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 651}]
+- name records with non-ASCII: 0
+- name records with punctuation: 111
+
+## Test sources
+### test S1
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
+- size: 31,518 bytes
+- rows: 400
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 400
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 400
+    - min_len: 8
+    - max_len: 8
+    - mean_len: 8.0
+    - median_len: 8.0
+    - p95_len: 8.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S1': 400}
+- column `business_name`:
+    - n: 400
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 381
+    - min_len: 11
+    - max_len: 39
+    - mean_len: 22.37
+    - median_len: 22.0
+    - p95_len: 31.049999999999955
+    - total_tokens: 1366
+    - mean_tokens: 3.415
+    - max_tokens: 6
+    - top_tokens: ltd:110, pvt:57, international:50, company:50, llc:49, corp:47, inc:43, solutions:43, general:43, stores:43, motors:41, logistics:39
+    - rare_tokens: dubois:10, patel:11, smith:14, bernard:14, martin:14, kumar:15, rao:16, sunrise:17, zenith:17, johnson:19, star:19, iyer:20
+    - vocab_size: 46
+- column `business_address`:
+    - n: 400
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 399
+    - min_len: 21
+    - max_len: 51
+    - mean_len: 35.8975
+    - median_len: 38.0
+    - p95_len: 47.0
+    - total_tokens: 2331
+    - mean_tokens: 5.8275
+    - max_tokens: 9
+    - top_tokens: ave,:150, united:150, states:150, street,:128, india:128, france:122, rue:69, de:37, la:37, lake:36, victor:32, gandhi:30
+    - rare_tokens: 743:1, 194:1, 843:1, 471:1, 774167,:1, 174:1, 488:1, 128787,:1, 713:1, 165:1, 799:1, 187309,:1
+    - vocab_size: 501
+    - numeric_token_total: 528
+    - records_with_postal_like: 128
+- column `country`:
+    - n: 400
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 3
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 8.305
+    - median_len: 6.0
+    - p95_len: 13.0
+    - distribution: {'united states': 150, 'india': 128, 'france': 122}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 400}]
+- name records with non-ASCII: 23
+- name records with punctuation: 0
+
+### test S2
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
+- size: 52,541 bytes
+- rows: 657
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 657
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 657
+    - min_len: 9
+    - max_len: 9
+    - mean_len: 9.0
+    - median_len: 9.0
+    - p95_len: 9.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S2': 657}
+- column `business_name`:
+    - n: 657
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 626
+    - min_len: 8
+    - max_len: 41
+    - mean_len: 22.616438356164384
+    - median_len: 21.0
+    - p95_len: 33.0
+    - total_tokens: 2260
+    - mean_tokens: 3.4398782343987824
+    - max_tokens: 6
+    - top_tokens: ltd:153, pvt:88, llc:86, international:76, corp:74, solutions:69, pharma:66, general:64, co:63, stores:63, inc:62, electronics:60
+    - rare_tokens: i:1, compa:1, logistic:1, trad:1, internationa:1, internatio:1, st:1, electronic:1, industri:1, mo:1, trade:1, logisti:1
+    - vocab_size: 69
+- column `business_address`:
+    - n: 657
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 646
+    - min_len: 20
+    - max_len: 55
+    - mean_len: 36.009132420091326
+    - median_len: 38.0
+    - p95_len: 48.0
+    - total_tokens: 3950
+    - mean_tokens: 6.012176560121766
+    - max_tokens: 11
+    - top_tokens: united:235, states:235, india:216, france:206, ave,:192, street,:170, rue:133, ,:80, de:74, la:74, gandhi:61, victor:59
+    - rare_tokens: 485:1, 56:1, 194:1, 282:1, 471:1, 774167,:1, 719989,:1, 102:1, 444709,:1, 70:1, 208:1, 489701,:1
+    - vocab_size: 735
+    - numeric_token_total: 873
+    - records_with_postal_like: 216
+- column `country`:
+    - n: 657
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 3
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 8.17503805175038
+    - median_len: 6.0
+    - p95_len: 13.0
+    - distribution: {'united states': 235, 'india': 216, 'france': 206}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 657}]
+- name records with non-ASCII: 40
+- name records with punctuation: 42
+
+### test S3
+- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
+- size: 17,309 bytes
+- rows: 218
+- header: ['entity_id', 'business_name', 'business_address', 'country']
+- column `entity_id`:
+    - n: 218
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 218
+    - min_len: 9
+    - max_len: 9
+    - mean_len: 9.0
+    - median_len: 9.0
+    - p95_len: 9.0
+    - duplicate_ids: 0
+    - prefix_distribution: {'S3': 218}
+- column `business_name`:
+    - n: 218
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 217
+    - min_len: 8
+    - max_len: 44
+    - mean_len: 22.894495412844037
+    - median_len: 22.0
+    - p95_len: 34.0
+    - total_tokens: 760
+    - mean_tokens: 3.4862385321100917
+    - max_tokens: 6
+    - top_tokens: ltd:38, pvt:35, co:32, brown:30, trading:25, logistics:25, general:22, foods:22, solutions:21, international:21, stores:21, union:20
+    - rare_tokens: c:1, mot:1, tra:1, logist:1, internati:1, internationa:1, indust:1, enterpr:1, electro:1, foo:1, in:1, comp:1
+    - vocab_size: 68
+- column `business_address`:
+    - n: 218
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 198
+    - min_len: 21
+    - max_len: 52
+    - mean_len: 35.22935779816514
+    - median_len: 37.0
+    - p95_len: 48.0
+    - total_tokens: 1326
+    - mean_tokens: 6.08256880733945
+    - max_tokens: 11
+    - top_tokens: france:74, united:72, states:72, india:72, ,:68, rue:40, ave,:31, street,:31, victor:22, church:20, lake:19, nantes,:18
+    - rare_tokens: 843:1, 165:1, 483:1, 661:1, 551:1, 403790:1, 181657,:1, 121:1, 991050:1, 564:1, 39:1, 650364,:1
+    - vocab_size: 289
+    - numeric_token_total: 290
+    - records_with_postal_like: 72
+- column `country`:
+    - n: 218
+    - null_count: 0
+    - empty_or_blank: 0
+    - unique: 3
+    - min_len: 5
+    - max_len: 13
+    - mean_len: 7.981651376146789
+    - median_len: 6.0
+    - p95_len: 13.0
+    - distribution: {'france': 74, 'united states': 72, 'india': 72}
+- missing field combinations: [{'name_missing': False, 'addr_missing': False, 'country_missing': False, 'len': 218}]
+- name records with non-ASCII: 11
+- name records with punctuation: 36
+
+## Ground truth
+- path: /workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv
+- n_rows: 1200
+- n_unique_s1: 1200
+- duplicate_s1_rows: 0
+- match_count_distribution: {'0': 501, '1': 324, '2': 235, '3': 77, '4': 42, '5': 19, '6': 2}
+- n_singletons: 501
+- n_with_matches: 699
+- n_multi_match_entities: 375
+- positive_match_ids_total: 1300
+- positive_by_source: {'S3': 651, 'S2': 649}
+- s2_positive_count: 649
+- s3_positive_count: 651

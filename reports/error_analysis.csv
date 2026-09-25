@@ -1,0 +1,2 @@
+error_type,s1_id,candidate_id,s1_name,candidate_name,s1_address,candidate_address,country,probability,true_label,blocks,n_blocks,top_prob,second_prob,margin,n_candidates
+false_positive,S1-00183,S2-001029,Martin Royal Motors,Martin Pharma,"114 Gandhi Ave, Fairview, United States","114 Gandhi Ave, Fairview, United States",united states,0.996337,0,996,6,0.996337,0.996337,0.000000,476
