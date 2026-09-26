@@ -93,20 +93,26 @@ def main(argv=None) -> int:
         p = generate_final_report(cfg.reports_dir, cfg.models_dir, cfg.output_dir)
         LOG.info("wrote %s", p)
     elif args.stage == "all":
-        summary = pipeline.run_all()
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            train_summary = scalable.train()
+            predict_summary = scalable.predict()
+        finally:
+            scalable.close()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
+        submission_summary = pipeline.validate_submission()
+        summary = {"train": train_summary, "predict": predict_summary,
+                   "submission": submission_summary}
         if args.zip:
             from build_zip import build_submission_zip
-
             team = args.team_name or cfg.section("submission").get("team_name", "team")
-            path = build_submission_zip(
-                pipeline.cfg, team_name=team, project_dir=Path(__file__).resolve().parent
-            )
+            path = build_submission_zip(cfg, team_name=team, project_dir=Path(__file__).resolve().parent)
             LOG.info("submission zip: %s", path)
             summary["zip"] = str(path)
-        _print_final_report(pipeline, summary)
         Path(cfg.reports_dir / "run_summary.json").write_text(
             json.dumps(summary, indent=2, default=str), encoding="utf-8"
         )
+
 
     LOG.info("stage '%s' finished in %s", args.stage, human_seconds(time.perf_counter() - t0))
     return 0
