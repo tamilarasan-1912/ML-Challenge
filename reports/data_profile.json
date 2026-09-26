@@ -1,22 +1,22 @@
 {
-  "data_root": "/workspace/project/ML-Challenge/dev/synthetic/student_resource",
+  "data_root": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource",
   "resolved": {
-    "train_gt": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv",
+    "train_gt": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv",
     "train": {
-      "S1": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv",
-      "S2": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv",
-      "S3": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv"
+      "S1": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source1.tsv",
+      "S2": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source2.tsv",
+      "S3": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source3.tsv"
     },
     "test": {
-      "S1": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv",
-      "S2": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv",
-      "S3": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv"
+      "S1": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source1.tsv",
+      "S2": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source2.tsv",
+      "S3": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source3.tsv"
     },
-    "validator": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/utils/validate_submission.py"
+    "validator": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/utils/validate_submission.py"
   },
   "train": {
     "S1": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source1.tsv",
       "file_size_bytes": 101134,
       "header": [
         "entity_id",
@@ -509,7 +509,7 @@
       "name_with_punctuation_records": 0
     },
     "S2": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source2.tsv",
       "file_size_bytes": 158404,
       "header": [
         "entity_id",
@@ -1002,7 +1002,7 @@
       "name_with_punctuation_records": 106
     },
     "S3": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source3.tsv",
       "file_size_bytes": 55201,
       "header": [
         "entity_id",
@@ -1497,7 +1497,7 @@
   },
   "test": {
     "S1": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source1.tsv",
       "file_size_bytes": 31518,
       "header": [
         "entity_id",
@@ -1991,7 +1991,7 @@
       "name_with_punctuation_records": 0
     },
     "S2": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source2.tsv",
       "file_size_bytes": 52541,
       "header": [
         "entity_id",
@@ -2485,7 +2485,7 @@
       "name_with_punctuation_records": 42
     },
     "S3": {
-      "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv",
+      "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source3.tsv",
       "file_size_bytes": 17309,
       "header": [
         "entity_id",
@@ -2980,7 +2980,7 @@
     }
   },
   "ground_truth": {
-    "path": "/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv",
+    "path": "/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv",
     "n_rows": 1200,
     "n_unique_s1": 1200,
     "duplicate_s1_rows": 0,

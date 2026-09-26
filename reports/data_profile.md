@@ -1,18 +1,18 @@
 # Data Profile
 
-Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
+Data root: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource`
 
 ## Resolved files
-- train S1: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
-- train S2: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
-- train S3: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
-- test S1: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
-- test S2: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
-- test S3: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
+- train S1: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
+- train S2: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
+- train S3: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
+- test S1: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
+- test S2: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
+- test S3: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
 
 ## Train sources
 ### train S1
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source1.tsv`
 - size: 101,134 bytes
 - rows: 1,200
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -78,7 +78,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 - name records with punctuation: 0
 
 ### train S2
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source2.tsv`
 - size: 158,404 bytes
 - rows: 1,859
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -144,7 +144,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 - name records with punctuation: 106
 
 ### train S3
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_source3.tsv`
 - size: 55,201 bytes
 - rows: 651
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -211,7 +211,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 
 ## Test sources
 ### test S1
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source1.tsv`
 - size: 31,518 bytes
 - rows: 400
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -277,7 +277,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 - name records with punctuation: 0
 
 ### test S2
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source2.tsv`
 - size: 52,541 bytes
 - rows: 657
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -343,7 +343,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 - name records with punctuation: 42
 
 ### test S3
-- file: `/workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
+- file: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/test/test_source3.tsv`
 - size: 17,309 bytes
 - rows: 218
 - header: ['entity_id', 'business_name', 'business_address', 'country']
@@ -409,7 +409,7 @@ Data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
 - name records with punctuation: 36
 
 ## Ground truth
-- path: /workspace/project/ML-Challenge/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv
+- path: /workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource/dataset/train/train_ground_truth.tsv
 - n_rows: 1200
 - n_unique_s1: 1200
 - duplicate_s1_rows: 0

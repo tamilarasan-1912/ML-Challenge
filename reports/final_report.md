@@ -4,7 +4,7 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 
 ## Dataset statistics
 
-- data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
+- data root: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource`
 - train S1: 1200 rows (blank names: 0)
 - train S2: 1859 rows (blank names: 0)
 - train S3: 651 rows (blank names: 0)
@@ -18,9 +18,9 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 ## Candidate generation
 
 - candidate recall: 1.0
-- candidate reduction ratio: 0.7899926958831341
-- mean / median candidates per S1: 527.1183333333333 / 518.0
-- p95 / p99 / max candidates: 662.05 / 707.01 / 721.0
+- candidate reduction ratio: 0.7903300132802125
+- mean / median candidates per S1: 526.2716666666666 / 517.0
+- p95 / p99 / max candidates: 657.05 / 705.0 / 732.0
 - positive pairs: 1300 of 1300 retained
 - S1->S2 candidate recall: 1.0 (649/649)
 - S1->S3 candidate recall: 1.0 (651/651)
@@ -86,6 +86,7 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 | train_1790351081 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.17 | 1332047872 | calib=isotonic;mining_sel=21588 |
 | train_1790351284 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.14 | 1332428800 | calib=isotonic;mining_sel=21588 |
 | train_1790351482 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.32 | 1327566848 | calib=isotonic;mining_sel=21588 |
+| train_1790449747 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 41.06 | 1350807552 | calib=isotonic;mining_sel=21588 |
 
 ## Submission validation
 

@@ -7,7 +7,8 @@ string, because different features need different views:
   light_normalized-> casefold, whitespace, punctuation cleanup, & -> and
   heavy_normalized-> light + legal-suffix / abbreviation canonicalisation
   core            -> heavy with legal suffixes *removed* (business "core" name)
-  tokens          -> token list of light_normalized
+  token list      -> token list of light_normalized
+  character n-grams -> for fuzzy blocking
 
 Addresses additionally yield numeric tokens, house-number, and postal candidates.
 No external geocoding or data is ever used.
@@ -17,7 +18,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from functools import lru_cache
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Set
 
 # --------------------------------------------------------------------------- #
 # Character-level cleanup
@@ -40,7 +41,79 @@ _AND_PATTERNS = [
     (re.compile(r"\s+@\s+"), " at "),
 ]
 
+# Common business suffixes/legal forms - open set friendly
+_LEGAL_TOKENS = {
+    "incorporated", "inc", "corporation", "corp", "corporate",
+    "company", "co", "limited", "ltd", "llc", "llp", "lp", "plc",
+    "private", "pvt", "pvtltd", "pte", "srl", "gmbh", "sa",
+    "ag", "bv", "nv", "sas", "sarl", "spa", "kk", "oy", "ab", "as",
+    "pty", "trust", "foundation", "enterprises", "enterprise",
+    "international", "intl", "group", "holdings", "holding",
+    "ltda", "sa de cv", "s.a.", "s.r.l.", "g.m.b.h.",
+}
 
+# Multi-word abbreviations must be applied before token-level legal removal.
+_MULTIWORD_ABBREV = [
+    (re.compile(r"\bprivate\s+limited\b"), "pvt ltd"),
+    (re.compile(r"\bpvt\.?\s*ltd\.?\b"), "pvt ltd"),
+    # only expand a *bare* pvt that is not already followed by ltd
+    (re.compile(r"\bpvt\b(?!\s*ltd)"), "pvt ltd"),
+    (re.compile(r"\bsociete\s+anonyme\b"), "sa"),
+    (re.compile(r"\bco\s+limited\b"), "co ltd"),
+    (re.compile(r"\bsociedade\s+anonima\b"), "sa"),
+    (re.compile(r"\bgesellschaft\s+m\.?\s*b\.?\s*h\.?\b"), "gmbh"),
+]
+
+_TOKEN_CANON = {
+    "incorporated": "inc", "corporation": "corp", "corporate": "corp",
+    "company": "co", "limited": "ltd", "private": "pvt",
+    "international": "intl", "holdings": "holding",
+    "and": "and",
+    "enterprises": "enterprise",
+}
+
+# Road-type abbreviations for addresses
+_ADDR_CANON = {
+    "road": "rd", "street": "st", "avenue": "ave", "avenu": "ave",
+    "boulevard": "blvd", "drive": "dr", "lane": "ln", "highway": "hwy",
+    "parkway": "pkwy", "place": "pl", "court": "ct", "circle": "cir",
+    "square": "sq", "terrace": "ter", "nagar": "nagar",
+    "cross": "cross", "main": "main", "layout": "layout",
+    "sector": "sector", "block": "block", "phase": "phase",
+    "floor": "flr", "building": "bldg", "apartment": "apt",
+    "suite": "ste", "number": "no", "opposite": "opp",
+    "near": "near", "post": "po", "district": "dist",
+    "north": "n", "south": "s", "east": "e", "west": "w",
+    "northern": "n", "southern": "s", "eastern": "e", "western": "w",
+    "rue": "rue", "avenue": "ave", "boulevard": "blvd",
+    "place": "pl", "allee": "allee", "chemin": "chem",
+    "route": "rte", "impasse": "imp",
+}
+
+# Country canonicalisation (open-set friendly)
+_COUNTRY_CANON = {
+    "us": "united states", "usa": "united states", "u s a": "united states",
+    "u s": "united states", "united states of america": "united states",
+    "america": "united states",
+    "in": "india", "ind": "india", "bharat": "india",
+    "fr": "france", "fra": "france", "french republic": "france",
+    "uk": "united kingdom", "gb": "united kingdom", "great britain": "united kingdom",
+    "uae": "united arab emirates",
+    "ca": "canada", "cn": "china", "de": "germany", "au": "australia",
+    "sg": "singapore", "ae": "united arab emirates",
+    "jp": "japan", "kr": "korea", "br": "brazil", "mx": "mexico",
+    "nl": "netherlands", "it": "italy", "es": "spain", "ch": "switzerland",
+}
+
+_NUM_RE = re.compile(r"\d+")
+_POSTAL_RE = re.compile(r"\b(\d{5,6}(?:[- ]\d{3,4})?)\b")
+_ALNUM_RE = re.compile(r"[a-z0-9]+")
+
+_STOP_TOKENS = {"the", "of", "and", "at", "for", "to", "in", "a", "an", "on"}
+
+# --------------------------------------------------------------------------- #
+# Core normalization functions
+# --------------------------------------------------------------------------- #
 def strip_accents(text: str) -> str:
     """NFKD-decompose and drop combining marks (a safe transliteration)."""
     if not text:
@@ -70,70 +143,6 @@ def clean_text(text: Optional[str]) -> str:
     s = _PUNCT_RE.sub(" ", s)
     s = _MULTI_WS.sub(" ", s).strip()
     return s
-
-
-# --------------------------------------------------------------------------- #
-# Business-name abbreviation / legal-suffix canonicalisation
-# --------------------------------------------------------------------------- #
-_LEGAL_TOKENS = {
-    "incorporated", "inc", "corporation", "corp", "corporate",
-    "company", "co", "limited", "ltd", "llc", "llp", "lp", "plc",
-    "private", "pvt", "pvtltd", "pvtltd", "pte", "srl", "gmbh", "sa",
-    "ag", "bv", "nv", "sas", "sarl", "spa", "kk", "oy", "ab", "as",
-    "pty", "trust", "foundation", "enterprises", "enterprise",
-    "international", "intl", "group", "holdings", "holding",
-}
-
-# Multi-word abbreviations must be applied before token-level legal removal.
-_MULTIWORD_ABBREV = [
-    (re.compile(r"\bprivate\s+limited\b"), "pvt ltd"),
-    (re.compile(r"\bpvt\.?\s*ltd\.?\b"), "pvt ltd"),
-    # only expand a *bare* pvt that is not already followed by ltd
-    (re.compile(r"\bpvt\b(?!\s*ltd)"), "pvt ltd"),
-    (re.compile(r"\bsociete\s+anonyme\b"), "sa"),
-    (re.compile(r"\bco\s+limited\b"), "co ltd"),
-]
-
-_TOKEN_CANON = {
-    "incorporated": "inc", "corporation": "corp", "corporate": "corp",
-    "company": "co", "limited": "ltd", "private": "pvt",
-    "international": "intl", "holdings": "holding",
-    "and": "and",
-}
-
-# Road-type abbreviations for addresses
-_ADDR_CANON = {
-    "road": "rd", "street": "st", "avenue": "ave", "avenu": "ave",
-    "boulevard": "blvd", "drive": "dr", "lane": "ln", "highway": "hwy",
-    "parkway": "pkwy", "place": "pl", "court": "ct", "circle": "cir",
-    "square": "sq", "terrace": "ter", "nagar": "nagar",
-    "cross": "cross", "main": "main", "layout": "layout",
-    "sector": "sector", "block": "block", "phase": "phase",
-    "floor": "flr", "building": "bldg", "apartment": "apt",
-    "suite": "ste", "number": "no", "opposite": "opp",
-    "near": "near", "post": "po", "district": "dist",
-    "north": "n", "south": "s", "east": "e", "west": "w",
-    "northern": "n", "southern": "s", "eastern": "e", "western": "w",
-}
-
-# Country canonicalisation (open-set friendly)
-_COUNTRY_CANON = {
-    "us": "united states", "usa": "united states", "u s a": "united states",
-    "u s": "united states", "united states of america": "united states",
-    "america": "united states",
-    "in": "india", "ind": "india", "bharat": "india",
-    "fr": "france", "fra": "france", "french republic": "france",
-    "uk": "united kingdom", "gb": "united kingdom", "great britain": "united kingdom",
-    "uae": "united arab emirates",
-    "ca": "canada", "cn": "china", "de": "germany", "au": "australia",
-    "sg": "singapore", "ae": "united arab emirates",
-}
-
-_NUM_RE = re.compile(r"\d+")
-_POSTAL_RE = re.compile(r"\b(\d{5,6}(?:[- ]\d{3,4})?)\b")
-_ALNUM_RE = re.compile(r"[a-z0-9]+")
-
-_STOP_TOKENS = {"the", "of", "and", "at", "for", "to", "in", "a", "an", "on"}
 
 
 # --------------------------------------------------------------------------- #
@@ -176,6 +185,25 @@ def name_core_tokens(text: Optional[str]) -> List[str]:
     return [t for t in core_name(text).split() if t]
 
 
+def name_char_ngrams(text: Optional[str], n: int = 4, max_grams: int = 40) -> List[str]:
+    """Character n-grams over the compact heavy-normalized string (deduplicated)."""
+    s = heavy_normalize_name(text).replace(" ", "")
+    if len(s) < n:
+        return [s] if s else []
+    grams = [s[i:i+n] for i in range(len(s) - n + 1)]
+    if len(grams) > max_grams:
+        step = len(grams) / max_grams
+        grams = [grams[int(i * step)] for i in range(max_grams)]
+    # deduplicate preserving order
+    seen = set()
+    out = []
+    for g in grams:
+        if g not in seen:
+            seen.add(g)
+            out.append(g)
+    return out
+
+
 def drop_stopwords(tokens: Sequence[str]) -> List[str]:
     return [t for t in tokens if t not in _STOP_TOKENS]
 
@@ -203,7 +231,7 @@ def normalize_address_heavy(text: Optional[str]) -> str:
     for t in out:
         if not dedup or dedup[-1] != t:
             dedup.append(t)
-    return " ".join(dedup)
+    return " ".join(out)
 
 
 def address_tokens(text: Optional[str]) -> List[str]:
@@ -244,6 +272,24 @@ def house_number(text: Optional[str]) -> str:
     return str(int(nums[0]))
 
 
+def address_char_ngrams(text: Optional[str], n: int = 4, max_grams: int = 40) -> List[str]:
+    """Character n-grams for address fuzzy matching."""
+    s = normalize_address_heavy(text).replace(" ", "")
+    if len(s) < n:
+        return [s] if s else []
+    grams = [s[i:i+n] for i in range(len(s) - n + 1)]
+    if len(grams) > max_grams:
+        step = len(grams) / max_grams
+        grams = [grams[int(i * step)] for i in range(max_grams)]
+    seen = set()
+    out = []
+    for g in grams:
+        if g not in seen:
+            seen.add(g)
+            out.append(g)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Country
 # --------------------------------------------------------------------------- #
@@ -269,24 +315,36 @@ class TextRepresenter:
         heavy = heavy_normalize_name(raw)
         core = core_name(raw)
         toks = name_tokens(raw)
+        core_toks = name_core_tokens(raw)
+        ngrams = name_char_ngrams(raw)
         return {
             "business_name_light_normalized": light,
             "business_name_heavy_normalized": heavy,
             "business_name_core": core,
             "business_name_tokens": toks,
-            "business_name_core_tokens": name_core_tokens(raw),
+            "business_name_core_tokens": core_toks,
+            "business_name_char_ngrams": ngrams,
         }
 
     @staticmethod
     def address_reprs(raw: Optional[str]) -> Dict[str, object]:
+        light = normalize_address_light(raw)
+        heavy = normalize_address_heavy(raw)
+        toks = address_tokens(raw)
+        nums = address_numbers(raw)
+        alnum = address_alnum_tokens(raw)
+        postals = postal_candidates(raw)
+        house = house_number(raw)
+        ngrams = address_char_ngrams(raw)
         return {
-            "business_address_normalized": normalize_address_light(raw),
-            "business_address_heavy": normalize_address_heavy(raw),
-            "business_address_tokens": address_tokens(raw),
-            "address_numbers": address_numbers(raw),
-            "address_alnum_tokens": address_alnum_tokens(raw),
-            "postal_candidates": postal_candidates(raw),
-            "house_number": house_number(raw),
+            "business_address_normalized": light,
+            "business_address_heavy": heavy,
+            "business_address_tokens": toks,
+            "address_numbers": nums,
+            "address_alnum_tokens": alnum,
+            "postal_candidates": postals,
+            "house_number": house,
+            "business_address_char_ngrams": ngrams,
         }
 
     @staticmethod

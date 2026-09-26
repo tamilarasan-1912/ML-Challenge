@@ -9,6 +9,7 @@ Everything here is designed for constrained RAM:
 * posting lists are ``int32`` numpy arrays, not Python lists of ints;
 * frequency statistics are computed with ``collections.Counter`` over the same
   token structures (single pass, no dense matrices).
+* DuckDB-backed indexes for disk-backed operations on large datasets.
 """
 from __future__ import annotations
 
@@ -18,7 +19,6 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import polars as pl
-from rapidfuzz import fuzz
 
 from . import normalization as norm
 from .utils import LOG
@@ -43,6 +43,7 @@ class SourceTable:
     name_core: List[str] = field(default_factory=list)
     name_tokens: List[TokenSeq] = field(default_factory=list)
     name_core_tokens: List[TokenSeq] = field(default_factory=list)
+    name_char_ngrams: List[TokenSeq] = field(default_factory=list)
 
     addr_raw: List[str] = field(default_factory=list)
     addr_light: List[str] = field(default_factory=list)
@@ -51,6 +52,7 @@ class SourceTable:
     addr_numbers: List[TokenSeq] = field(default_factory=list)
     postals: List[TokenSeq] = field(default_factory=list)
     house_no: List[str] = field(default_factory=list)
+    addr_char_ngrams: List[TokenSeq] = field(default_factory=list)
 
     country_raw: List[str] = field(default_factory=list)
     country_norm: List[str] = field(default_factory=list)
@@ -86,6 +88,7 @@ def build_source_table(tag: str, df: "pl.DataFrame") -> SourceTable:
         st.name_core.append(nr["business_name_core"])
         st.name_tokens.append(tuple(nr["business_name_tokens"]))
         st.name_core_tokens.append(tuple(nr["business_name_core_tokens"]))
+        st.name_char_ngrams.append(tuple(nr["business_name_char_ngrams"]))
         st.addr_raw.append(ad or "")
         st.addr_light.append(ar["business_address_normalized"])
         st.addr_heavy.append(ar["business_address_heavy"])
@@ -93,6 +96,7 @@ def build_source_table(tag: str, df: "pl.DataFrame") -> SourceTable:
         st.addr_numbers.append(tuple(ar["address_numbers"]))
         st.postals.append(tuple(ar["postal_candidates"]))
         st.house_no.append(ar["house_number"])
+        st.addr_char_ngrams.append(tuple(ar["business_address_char_ngrams"]))
         st.country_raw.append(ct or "")
         st.country_norm.append(cr["country_normalized"])
     return st
@@ -152,9 +156,8 @@ def char_ngrams(text: str, n: int = 4, max_grams: int = 40) -> TokenSeq:
     s = text.replace(" ", "")
     if len(s) < n:
         return tuple([s]) if s else ()
-    grams = [s[i : i + n] for i in range(len(s) - n + 1)]
+    grams = [s[i:i+n] for i in range(len(s) - n + 1)]
     if len(grams) > max_grams:
-        # keep a spread of grams (head+tail) deterministically
         step = len(grams) / max_grams
         grams = [grams[int(i * step)] for i in range(max_grams)]
     return tuple(dict.fromkeys(grams))
@@ -179,13 +182,11 @@ class FrequencyStats:
 
     def idf_name_token(self, tok: str) -> float:
         import math
-
         df = self.name_token_freq.get(tok, 0)
         return math.log((1 + self.total_names) / (1 + df)) + 1.0
 
     def idf_addr_token(self, tok: str) -> float:
         import math
-
         df = self.addr_token_freq.get(tok, 0)
         return math.log((1 + self.total_addrs) / (1 + df)) + 1.0
 
@@ -249,11 +250,13 @@ class CandidateSpace:
     name_heavy: List[str] = field(default_factory=list)
     name_tokens: List[TokenSeq] = field(default_factory=list)
     name_core_tokens: List[TokenSeq] = field(default_factory=list)
+    name_char_ngrams: List[TokenSeq] = field(default_factory=list)
     addr_light: List[str] = field(default_factory=list)
     addr_heavy: List[str] = field(default_factory=list)
     addr_tokens: List[TokenSeq] = field(default_factory=list)
     postals: List[TokenSeq] = field(default_factory=list)
     house_no: List[str] = field(default_factory=list)
+    addr_char_ngrams: List[TokenSeq] = field(default_factory=list)
     country_norm: List[str] = field(default_factory=list)
     name_raw: List[str] = field(default_factory=list)
     addr_raw: List[str] = field(default_factory=list)
@@ -290,11 +293,13 @@ def build_candidate_space(tables: Dict[str, SourceTable], order: Sequence[str] =
         cs.name_heavy.extend(st.name_heavy)
         cs.name_tokens.extend(st.name_tokens)
         cs.name_core_tokens.extend(st.name_core_tokens)
+        cs.name_char_ngrams.extend(st.name_char_ngrams)
         cs.addr_light.extend(st.addr_light)
         cs.addr_heavy.extend(st.addr_heavy)
         cs.addr_tokens.extend(st.addr_tokens)
         cs.postals.extend(st.postals)
         cs.house_no.extend(st.house_no)
+        cs.addr_char_ngrams.extend(st.addr_char_ngrams)
         cs.country_norm.extend(st.country_norm)
         cs.name_raw.extend(st.name_raw)
         cs.addr_raw.extend(st.addr_raw)
@@ -303,3 +308,113 @@ def build_candidate_space(tables: Dict[str, SourceTable], order: Sequence[str] =
 
 def global_id(space: CandidateSpace, source: str, local: int) -> int:
     return space.offsets[source] + local
+
+
+# --------------------------------------------------------------------------- #
+# DuckDB-backed index for large-scale streaming
+# --------------------------------------------------------------------------- #
+class DuckDBIndex:
+    """Disk-backed inverted index using DuckDB for memory-safe large-scale processing."""
+
+    def __init__(self, db_path: str):
+        import duckdb
+        self.conn = duckdb.connect(db_path)
+        self._init_schema()
+
+    def _init_schema(self) -> None:
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS candidates (
+                gid INTEGER PRIMARY KEY,
+                source_id UTINYINT,
+                local_idx INTEGER,
+                entity_id VARCHAR,
+                name_light VARCHAR,
+                name_heavy VARCHAR,
+                name_core VARCHAR,
+                addr_light VARCHAR,
+                addr_heavy VARCHAR,
+                house_no VARCHAR,
+                country_norm VARCHAR
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_name_light ON candidates(name_light)
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_name_core ON candidates(name_core)
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_addr_light ON candidates(addr_light)
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_country ON candidates(country_norm)
+        """)
+
+    def populate(self, cs: CandidateSpace, batch_size: int = 100000) -> None:
+        """Populate the DuckDB table from CandidateSpace in batches."""
+        import math
+        n = cs.total
+        for start in range(0, n, batch_size):
+            end = min(start + batch_size, n)
+            data = []
+            for gid in range(start, end):
+                data.append((
+                    gid,
+                    int(cs.source_of[gid]),
+                    int(cs.local_idx[gid]),
+                    cs.entity_ids[gid],
+                    cs.name_light[gid],
+                    cs.name_heavy[gid],
+                    cs.name_core[gid],
+                    cs.addr_light[gid],
+                    cs.addr_heavy[gid],
+                    cs.house_no[gid],
+                    cs.country_norm[gid],
+                ))
+            self.conn.executemany(
+                "INSERT INTO candidates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                data
+            )
+
+    def query_exact_name(self, name: str, country: Optional[str] = None, limit: int = 200) -> List[int]:
+        if country:
+            res = self.conn.execute(
+                "SELECT gid FROM candidates WHERE name_light = ? AND country_norm = ? LIMIT ?",
+                [name, country, limit]
+            ).fetchall()
+        else:
+            res = self.conn.execute(
+                "SELECT gid FROM candidates WHERE name_light = ? LIMIT ?",
+                [name, limit]
+            ).fetchall()
+        return [r[0] for r in res]
+
+    def query_exact_core_name(self, name: str, country: Optional[str] = None, limit: int = 200) -> List[int]:
+        if country:
+            res = self.conn.execute(
+                "SELECT gid FROM candidates WHERE name_core = ? AND country_norm = ? LIMIT ?",
+                [name, country, limit]
+            ).fetchall()
+        else:
+            res = self.conn.execute(
+                "SELECT gid FROM candidates WHERE name_core = ? LIMIT ?",
+                [name, limit]
+            ).fetchall()
+        return [r[0] for r in res]
+
+    def query_exact_address(self, addr: str, limit: int = 200) -> List[int]:
+        res = self.conn.execute(
+            "SELECT gid FROM candidates WHERE addr_light = ? LIMIT ?",
+            [addr, limit]
+        ).fetchall()
+        return [r[0] for r in res]
+
+    def query_name_houseno(self, name: str, house: str, limit: int = 200) -> List[int]:
+        res = self.conn.execute(
+            "SELECT gid FROM candidates WHERE name_light = ? AND house_no = ? LIMIT ?",
+            [name, house, limit]
+        ).fetchall()
+        return [r[0] for r in res]
+
+    def close(self) -> None:
+        self.conn.close()
