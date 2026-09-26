@@ -37,7 +37,7 @@ FEATURE_NAMES = [
     "addr_exact","addr_jw","addr_lev_ratio","addr_token_jaccard","addr_len_ratio",
     "house_match","postal_match","country_equal","country_conflict",
     "block_count","block_mask","high_name_high_addr","name_addr_product",
-    "name_present","addr_present",
+    "name_present","addr_present","source_is_s3",
 ]
 N_FEATURES = len(FEATURE_NAMES)
 
@@ -230,7 +230,8 @@ class ScalableER:
           ((jaro_winkler_similarity(s.name,c.name)>=0.90 AND jaro_winkler_similarity(s.addr,c.addr)>=0.85))::INT high_name_high_addr,
           jaro_winkler_similarity(s.name,c.name)*jaro_winkler_similarity(s.addr,c.addr) name_addr_product,
           (s.name<>' ' AND s.name<>'')::INT name_present,
-          (s.addr<>' ' AND s.addr<>'')::INT addr_present
+          (s.addr<>' ' AND s.addr<>'')::INT addr_present,
+          (c.source='S3')::INT source_is_s3
         FROM s1_batch s JOIN candidate_batch b ON s.rid=b.rid
         JOIN {c} c ON b.gid=c.gid
         """
@@ -280,6 +281,7 @@ class ScalableER:
         selected=sample
         gt_by_id=self._gt_map([x[1] for x in selected])
         train_rows=[]; val_rows=[]; pos=neg=0
+        raw_pos=0; raw_gt=0; raw_counts=[]
         for j in range(0,len(selected),self.batch):
             chunk=selected[j:j+self.batch]
             self.con.execute("DROP TABLE IF EXISTS selected_rids")
@@ -298,6 +300,14 @@ class ScalableER:
             if posdf.height:
                 cand=pl.concat([cand,posdf]).unique(["rid","gid"])
             feats=self.feature_rows("tr",cand)
+            for sid in [x[1] for x in chunk]:
+                gtids=gt_by_id.get(sid,set())
+                raw_gt += len(gtids)
+                if feats.height:
+                    got=set(feats.filter(pl.col("s1_id")==sid)["entity_id"].to_list())
+                    raw_pos += len(gtids & got)
+            if feats.height:
+                raw_counts.extend([int(x) for x in feats.group_by("s1_id").len()["len"].to_list()])
             train_ids={x[0] for x in train_sample}; mask=np.array([r in train_ids for r in feats["rid"].to_list()])
             tr=feats.filter(pl.Series(mask)); va=feats.filter(pl.Series(~mask))
             if tr.height: train_rows.append(tr)
@@ -335,8 +345,20 @@ class ScalableER:
         bundle={"feature_names":FEATURE_NAMES,"decision":{"threshold":best[1],"threshold_s2":None,"threshold_s3":None,"high_conf":0.999,"margin":0.0,"top_only":False,"max_matches_per_entity":0},"candidate_cap":self.max_candidates,"train_entities":len(train_sample),"validation_entities":len(val_sample),"metrics":{"macro_f05":best[0]},"engine":"duckdb_streaming_v1","model_license":"MIT"}
         (Path(self.cfg.models_dir)/"artifacts_bundle.json").write_text(json.dumps(bundle,indent=2))
         with open(Path(self.cfg.models_dir)/"model.pkl","wb") as f: pickle.dump(model,f)
-        LOG.info("VALIDATION macro F0.5=%.6f threshold=%.4f",best[0],best[1])
-        return {"eval":{"macro_f05":best[0]},"decision":bundle["decision"],"train_entities":len(train_sample),"validation_entities":len(val_sample)}
+        cand_recall=(raw_pos/raw_gt) if raw_gt else 0.0
+        rec={"candidate_recall":cand_recall,"positive_pairs_found":raw_pos,"positive_pairs_total":raw_gt,
+             "mean_candidates":float(np.mean(raw_counts)) if raw_counts else 0.0,
+             "p95_candidates":float(np.percentile(raw_counts,95)) if raw_counts else 0.0,
+             "p99_candidates":float(np.percentile(raw_counts,99)) if raw_counts else 0.0,
+             "max_candidates":int(max(raw_counts)) if raw_counts else 0,
+             "candidate_cap":self.max_candidates,"sample_entities":len(selected)}
+        write_json(self.cfg.reports_dir/"candidate_recall.json",rec)
+        validation={"eval":{"macro_f05":best[0]},"decision":bundle["decision"],
+                    "candidate_recall":rec,"train_entities":len(train_sample),
+                    "validation_entities":len(val_sample),"feature_count":len(FEATURE_NAMES)}
+        write_json(self.cfg.reports_dir/"validation_results.json",validation)
+        LOG.info("CANDIDATE recall(raw)=%.6f; VALIDATION macro F0.5=%.6f threshold=%.4f",cand_recall,best[0],best[1])
+        return validation
 
     def predict(self) -> dict:
         self.prepare(train=False,test=True)
