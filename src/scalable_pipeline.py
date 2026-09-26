@@ -304,12 +304,11 @@ class ScalableER:
                 self.con.register("raw_candidate_batch", raw_candidate_batch.to_arrow())
                 rawdf=self.con.execute("SELECT r.rid,c.entity_id FROM raw_candidate_batch r JOIN tr_cand c ON r.gid=c.gid").pl()
                 self.con.unregister("raw_candidate_batch")
+                rid_map={x[1]:x[0] for x in chunk}
                 for sid in [x[1] for x in chunk]:
                     gtids=gt_by_id.get(sid,set())
                     raw_gt += len(gtids)
-                    got=set(rawdf.filter(pl.col("rid")==chunk[[x[0] for x in chunk].index(next(r for r in chunk if r[1]==sid))][0])["entity_id"].to_list()) if False else set()
                     if gtids:
-                        rid_map={x[1]:x[0] for x in chunk}
                         got=set(rawdf.filter(pl.col("rid")==rid_map[sid])["entity_id"].to_list())
                         raw_pos += len(gtids & got)
                 raw_counts.extend([int(x) for x in rawdf.group_by("rid").len()["len"].to_list()])
