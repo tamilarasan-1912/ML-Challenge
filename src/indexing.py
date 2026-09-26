@@ -322,8 +322,9 @@ class DuckDBIndex:
         self._init_schema()
 
     def _init_schema(self) -> None:
+        self.conn.execute("DROP TABLE IF EXISTS candidates")
         self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS candidates (
+            CREATE TABLE candidates (
                 gid INTEGER PRIMARY KEY,
                 source_id UTINYINT,
                 local_idx INTEGER,

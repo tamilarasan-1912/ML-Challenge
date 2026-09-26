@@ -1,12 +1,12 @@
 experiment,macro_f05,details
 1. exact matching only,0.204108,"rule-based, no model"
 2. + normalization (core name),0.092688,rule-based
-3. + fuzzy name features,0.937526,
+3. + fuzzy name features,0.93252,
 4. + fuzzy address features,0.8825,
 5. + numeric/address features,0.999491,
-6. + multi-blocking features,0.8825,
+6. + multi-blocking features,0.999491,
 7. + rarity features,0.999491,
-8. all features + hard negatives,0.999491,
+8. all features + hard negatives,0.8825,
 9. + calibration + threshold opt,0.999861,
 10. + tuned global threshold,0.999861,thr=0.3000
 11. + source-specific thresholds,0.999861,s2=None s3=None

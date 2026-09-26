@@ -41,7 +41,7 @@ macOS metadata (`__MACOSX`, `._*`, `.DS_Store`) is ignored automatically.
 | Stage | What it does | Key outputs |
 |---|---|---|
 | `profile` | measures every real statistic of the supplied data | `reports/data_profile.{md,json}` |
-| `train` | labels → candidates → features → hard negatives → LightGBM → calibration → threshold/ambiguity search | `models/*`, `experiments/experiment_log.csv`, `reports/{validation_results,threshold_search,calibration_search,feature_importance,candidate_recall,error_analysis}` |
+| `train` | labels → candidates → features → hard negatives → LightGBM → calibration → threshold/ambiguity search | `models/*`, `experiments/experiment_log.csv`, `reports/{validation_results,threshold_search,calibration_search,feature_importance,candidate_recall,error_analysis,block_recall_diagnostic}` |
 | `validate` | re-scores the saved model on the held-out S1 fold | `reports/validation_results.*` |
 | `predict` | test inference, writes the two submission TSVs | `output/matching_results.tsv`, `output/candidate_pairs.tsv` |
 | `validate-submission` | runs the official validator + independent structural checks | `reports/submission_validation.json` |
@@ -55,15 +55,63 @@ python run_experiments.py variants --data-root student_resource   # submission A
 python run_experiments.py tune     --data-root student_resource --trials 25 --budget 1800
 ```
 
+## Architecture Overview (V2 — Memory-Safe)
+
+### Normalization (multi-representation)
+Instead of a single normalized string, we generate multiple representations:
+- **Name**: light, heavy, core, tokens, core tokens, character n-grams
+- **Address**: light, heavy, tokens, numbers, alnum tokens, postal candidates, house number, character n-grams
+- **Country**: open-set canonicalization (no hard-coded countries)
+
+### Blocking / Candidate Generation (12 independent blocks)
+1. `exact_name` — country + normalized name
+2. `core_name` — country + core name (legal suffixes removed)
+3. `exact_name_heavy` — country + heavy normalized name
+4. `exact_address` — exact normalized address
+5. `name_housenumber` — name + house number
+6. `postal_name` — postal code + compatible name (token_set_ratio ≥ 0.5)
+7. `rare_name_token` — rare business-name tokens (df ≤ 400)
+8. `rare_addr_token` — rare address tokens (df ≤ 400)
+9. `char_ngram` — name character 4-grams (shared ≥ 2)
+10. `addr_ngram` — address character 4-grams (shared ≥ 2)
+11. `token_overlap` — core token overlap (Jaccard-style)
+12. `country_approx` — country-aware fuzzy name (token_set_ratio ≥ 0.6)
+
+Every candidate keeps a provenance bitmask + retrieval ranks for downstream features.
+
+### Streaming / Batched Processing
+- Candidate generation in batches of 25k S1 entities (configurable)
+- Hard cap of 1000 candidates per S1 entity
+- DuckDB-backed indexes for disk-backed operations
+- Explicit memory release between batches
+
+### Features (91 total)
+- **Name** (19): exact, fuzzy (ratio, Jaro-Winkler, token sort/set, partial), prefix/suffix, length, token coverage, n-gram Jaccard
+- **Address** (17): exact, fuzzy, token coverage, length, numeric overlap, house number, postal, digit overlap, first/last token, completeness
+- **Cross-field** (12): name×addr, min/max, high-high, high+number, high+postal, medium+high, presence flags, country equality/conflict
+- **Rarity** (10): frequency logs, rare flags, IDF-weighted overlap
+- **Blocking** (12): per-block retrieval flags, block count, retrieval ranks, source indicator
+- **Multi-block Evidence** (4): exact block count, strong block count, weak block count, block bitmask
+
+### Model & Training
+- LightGBM binary classifier (pair-level)
+- Entity-level 80/20 split (never pair-level)
+- Hard-negative mining (4 tiers: very-hard, hard, medium, easy)
+- Isotonic/Platt calibration selected by validation macro F0.5
+- Threshold + ambiguity optimization directly on entity-level macro F0.5
+
 ## Memory-efficient by construction
 
 * No Cartesian joins, no dense pairwise matrices.
-* Ten union blocks produce one merged candidate set per S1; every pair keeps a
+* Twelve union blocks produce one merged candidate set per S1; every pair keeps a
   provenance bitmask plus retrieval ranks.
 * Inverted indexes are `int32` numpy posting lists; tokens are tuples.
 * Rare-token retrieval uses training-only frequency statistics (no test leakage).
 * Candidate feature extraction memoises fuzzy bundles on the string pair.
 * Entity-level 80/20 split; the split is by S1 entity, never by pair.
+* **NEW**: Streaming candidate generation with configurable batch sizes
+* **NEW**: DuckDB-backed disk indexes for large-scale deployment
+* **NEW**: Block recall diagnostic to measure per-block recall/cost tradeoffs
 
 ## Output contract
 
@@ -90,6 +138,11 @@ matcher for each S1 entity. Every accepted match appears in it.
 ├── models/                  trained LightGBM + calibration bundle
 ├── experiments/             experiment_log.csv, configs/
 ├── reports/                 generated reports
+│   ├── block_recall_diagnostic.csv   # NEW: per-block recall & cost
+│   ├── candidate_recall.json
+│   ├── validation_results.json
+│   ├── error_analysis.csv
+│   └── final_report.md
 └── output/                  matching_results.tsv, candidate_pairs.tsv
 ```
 

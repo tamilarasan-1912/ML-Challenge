@@ -44,6 +44,7 @@ streaming:
   max_candidates_per_s1: 1000 # hard cap per S1 entity
   use_duckdb: true           # use disk-backed indexes
   release_memory: true       # explicitly release between batches
+  block_recall_sample: 1000  # sample size for block recall diagnostic (0 to disable)
 
 hard_negative_mining:
   keep_very_hard: true

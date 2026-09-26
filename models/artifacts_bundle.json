@@ -67,10 +67,18 @@
     "retrieved_by_char_ngram",
     "retrieved_by_token_overlap",
     "retrieved_by_country_approx",
+    "retrieved_by_addr_ngram",
+    "retrieved_by_exact_name_heavy",
     "number_of_blocks",
     "name_retrieval_rank",
     "ngram_retrieval_rank",
-    "cand_is_s3"
+    "addr_retrieval_rank",
+    "cand_is_s3",
+    "exact_block_count",
+    "strong_block_count",
+    "weak_block_count",
+    "block_bitmask",
+    "block_count"
   ],
   "decision": {
     "threshold": 0.3,
@@ -107,7 +115,7 @@
   "calibrator": {
     "kind": "isotonic"
   },
-  "best_iteration": 67,
+  "best_iteration": 9,
   "train_fraction": 0.8,
   "seed": 42,
   "metrics": {
@@ -156,13 +164,13 @@
     "n_pos_pairs": 1300,
     "n_pos_pairs_found": 1300,
     "candidate_recall": 1.0,
-    "n_candidates": 631526,
-    "reduction_ratio": 0.7903300132802125,
-    "mean_candidates": 526.2716666666666,
-    "median_candidates": 517.0,
-    "p95_candidates": 657.05,
-    "p99_candidates": 705.0,
-    "max_candidates": 732.0,
+    "n_candidates": 686805,
+    "reduction_ratio": 0.7719770916334662,
+    "mean_candidates": 572.3375,
+    "median_candidates": 563.0,
+    "p95_candidates": 717.05,
+    "p99_candidates": 757.02,
+    "max_candidates": 801.0,
     "by_source": {
       "S2": {
         "found": 649,
