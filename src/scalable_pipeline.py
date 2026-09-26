@@ -76,6 +76,7 @@ def _prep_sql(src: str, path: str, limit: int | None = None) -> str:
                                 all_varchar=true, ignore_errors=false);
     CREATE OR REPLACE TABLE {src} AS
     SELECT
+      row_number() OVER () - 1 AS rid,
       entity_id::VARCHAR AS entity_id,
       business_name::VARCHAR AS raw_name,
       business_address::VARCHAR AS raw_addr,
@@ -209,16 +210,16 @@ class ScalableER:
           jaro_similarity(s.name,c.name) name_jaro,
           1.0-(levenshtein(s.name,c.name)::DOUBLE/GREATEST(length(s.name),length(c.name),1)) name_lev_ratio,
           CASE WHEN s.name='' OR c.name='' THEN 0.0
-               ELSE list_intersect(string_split(s.name,' '),string_split(c.name,' '))::DOUBLE/
-                    GREATEST(list_unique(string_split(s.name,' '))::DOUBLE,1) END name_token_jaccard,
+               ELSE length(list_intersect(string_split(s.name,' '),string_split(c.name,' ')))::DOUBLE/
+                    GREATEST(length(list_unique(string_split(s.name,' '))),1) END name_token_jaccard,
           jaro_winkler_similarity(s.name,c.name) name_partial,
           LEAST(length(s.name),length(c.name))::DOUBLE/GREATEST(length(s.name),length(c.name),1) name_len_ratio,
           (s.addr<>'' AND s.addr=c.addr)::INT addr_exact,
           jaro_winkler_similarity(s.addr,c.addr) addr_jw,
           1.0-(levenshtein(s.addr,c.addr)::DOUBLE/GREATEST(length(s.addr),length(c.addr),1)) addr_lev_ratio,
           CASE WHEN s.addr='' OR c.addr='' THEN 0.0
-               ELSE list_intersect(string_split(s.addr,' '),string_split(c.addr,' '))::DOUBLE/
-                    GREATEST(list_unique(string_split(s.addr,' '))::DOUBLE,1) END addr_token_jaccard,
+               ELSE length(list_intersect(string_split(s.addr,' '),string_split(c.addr,' ')))::DOUBLE/
+                    GREATEST(length(list_unique(string_split(s.addr,' '))),1) END addr_token_jaccard,
           LEAST(length(s.addr),length(c.addr))::DOUBLE/GREATEST(length(s.addr),length(c.addr),1) addr_len_ratio,
           (s.house<>'' AND s.house=c.house)::INT house_match,
           (s.postal<>'' AND s.postal=c.postal)::INT postal_match,
@@ -280,13 +281,14 @@ class ScalableER:
         gt_by_id=self._gt_map([x[1] for x in selected])
         train_rows=[]; val_rows=[]; pos=neg=0
         for j in range(0,len(selected),self.batch):
-            chunk=selected[j:j+self.batch]; lo=min(x[0] for x in chunk); hi=max(x[0] for x in chunk)+1
-            # Use exact rid subset rather than contiguous range when reservoir sampling is sparse.
-            self.con.execute("CREATE OR REPLACE TEMP TABLE s1_batch AS SELECT * FROM tr_s1 WHERE rid IN (SELECT * FROM UNNEST(?))",[ [x[0] for x in chunk] ])
+            chunk=selected[j:j+self.batch]
+            self.con.execute("DROP TABLE IF EXISTS selected_rids")
+            self.con.execute("CREATE TEMP TABLE selected_rids(rid BIGINT)")
+            self.con.executemany("INSERT INTO selected_rids VALUES (?)", [(int(x[0]),) for x in chunk])
+            self.con.execute("CREATE OR REPLACE TEMP TABLE s1_batch AS SELECT * FROM tr_s1 WHERE rid IN (SELECT rid FROM selected_rids)")
             cand=self.con.execute(self._candidate_sql("tr_s1").replace("tr_s1 s","s1_batch s")).pl()
             # Guarantee known positives are in the training candidate set.
             ids=[x[1] for x in chunk]
-            self.con.register("chunk_ids", pl.DataFrame({"s1_id":ids}).to_arrow())
             posdf=self.con.execute("""
               SELECT s.rid,c.gid,0::UBIGINT block_mask,0::BIGINT block_count
               FROM s1_batch s JOIN tr_gt g ON s.entity_id=g.s1_id
@@ -296,7 +298,6 @@ class ScalableER:
             if posdf.height:
                 cand=pl.concat([cand,posdf]).unique(["rid","gid"])
             feats=self.feature_rows("tr",cand)
-            self.con.unregister("chunk_ids")
             train_ids={x[0] for x in train_sample}; mask=np.array([r in train_ids for r in feats["rid"].to_list()])
             tr=feats.filter(pl.Series(mask)); va=feats.filter(pl.Series(~mask))
             if tr.height: train_rows.append(tr)
