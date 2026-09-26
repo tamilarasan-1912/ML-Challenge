@@ -310,7 +310,19 @@ class ScalableER:
                 raw_counts.extend([int(x) for x in feats.group_by("s1_id").len()["len"].to_list()])
             train_ids={x[0] for x in train_sample}; mask=np.array([r in train_ids for r in feats["rid"].to_list()])
             tr=feats.filter(pl.Series(mask)); va=feats.filter(pl.Series(~mask))
-            if tr.height: train_rows.append(tr)
+            # Keep every positive but bound training negatives per entity.
+            sampled_parts=[]
+            for sid in tr["s1_id"].unique().to_list():
+                part=tr.filter(pl.col("s1_id")==sid)
+                gtset=gt_by_id.get(sid,set())
+                pos_part=part.filter(pl.col("entity_id").is_in(list(gtset)))
+                neg_part=part.filter(~pl.col("entity_id").is_in(list(gtset)))
+                neg_cap=max(20*max(1,pos_part.height),20)
+                if neg_part.height>neg_cap:
+                    neg_part=neg_part.sample(n=neg_cap,seed=self.seed)
+                sampled_parts.append(pl.concat([pos_part,neg_part],how="vertical"))
+            tr_sampled=pl.concat(sampled_parts,how="vertical") if sampled_parts else tr
+            if tr_sampled.height: train_rows.append(tr_sampled)
             if va.height: val_rows.append(va)
             LOG.info("training candidates batch %d/%d: %d",min(j+self.batch,len(selected)),len(selected),feats.height)
         gt_by_id=self._gt_map([x[1] for x in selected])
