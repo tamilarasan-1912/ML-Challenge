@@ -24,7 +24,8 @@ from pathlib import Path
 # allow "python run_pipeline.py" from inside the project directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.pipeline import Pipeline, load_config  # noqa: E402
+from src.pipeline import Pipeline, load_config
+from src.scalable_pipeline import ScalableER  # noqa: E402
 from src.utils import LOG, human_seconds, bytes_to_human as human_bytes  # noqa: E402
 
 
@@ -59,21 +60,36 @@ def main(argv=None) -> int:
         cfg.models_dir = Path(args.models_dir)
 
     t0 = time.perf_counter()
-    pipeline = Pipeline(cfg, data_root=args.data_root)
-
     if args.stage == "profile":
+        pipeline = Pipeline(cfg, data_root=args.data_root)
         pipeline.profile()
-    elif args.stage == "train":
-        pipeline.train()
+    elif args.stage in ("train", "predict"):
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            if args.stage == "train":
+                scalable.train()
+            else:
+                scalable.predict()
+        finally:
+            scalable.close()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
     elif args.stage == "validate":
-        pipeline.validate()
-    elif args.stage == "predict":
-        pipeline.predict()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
+        result_path = cfg.reports_dir / "validation_results.json"
+        if result_path.exists():
+            LOG.info("validation artifact already exists: %s", result_path)
+        else:
+            scalable = ScalableER(cfg, data_root=args.data_root)
+            try:
+                scalable.train()
+            finally:
+                scalable.close()
     elif args.stage == "validate-submission":
+        pipeline = Pipeline(cfg, data_root=args.data_root)
         pipeline.validate_submission()
     elif args.stage == "report":
+        pipeline = Pipeline(cfg, data_root=args.data_root)
         from src.reporting import generate_final_report
-
         p = generate_final_report(cfg.reports_dir, cfg.models_dir, cfg.output_dir)
         LOG.info("wrote %s", p)
     elif args.stage == "all":
