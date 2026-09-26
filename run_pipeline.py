@@ -85,8 +85,12 @@ def main(argv=None) -> int:
             finally:
                 scalable.close()
     elif args.stage == "validate-submission":
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            scalable.validate_submission()
+        finally:
+            scalable.close()
         pipeline = Pipeline(cfg, data_root=args.data_root)
-        pipeline.validate_submission()
     elif args.stage == "report":
         pipeline = Pipeline(cfg, data_root=args.data_root)
         from src.reporting import generate_final_report
