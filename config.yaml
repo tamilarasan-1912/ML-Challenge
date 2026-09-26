@@ -39,12 +39,14 @@ split:
 
 # Streaming / batch processing (NEW - for memory safety)
 streaming:
-  batch_size_s1: 25000       # S1 entities per batch during candidate gen / inference
+  batch_size_s1: 5000        # bounded S1 batch for DuckDB candidate generation / inference
   batch_size_pairs: 500000   # max pairs per feature extraction batch
-  max_candidates_per_s1: 1000 # hard cap per S1 entity
+  max_candidates_per_s1: 300  # final candidate set cap per S1 entity
   use_duckdb: true           # use disk-backed indexes
   release_memory: true       # explicitly release between batches
-  block_recall_sample: 1000  # sample size for block recall diagnostic (0 to disable)
+  block_recall_sample: 0     # legacy diagnostic disabled; scalable engine reports raw recall on its sample
+  training_entities: 100000   # bounded entity sample used for pair-model training
+  validation_entities: 20000  # bounded held-out entity sample for threshold selection
 
 hard_negative_mining:
   keep_very_hard: true
