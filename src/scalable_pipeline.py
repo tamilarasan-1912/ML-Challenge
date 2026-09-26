@@ -6,7 +6,7 @@ features, predictions and submission rows are never accumulated for the full tes
 set in Python memory.
 """
 from __future__ import annotations
-import csv, json, math, os, time, pickle
+import csv, json, math, os, time, pickle, subprocess, sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -299,15 +299,21 @@ class ScalableER:
             """).pl()
             if posdf.height:
                 cand=pl.concat([cand,posdf]).unique(["rid","gid"])
+            raw_candidate_batch=cand.clone()
+            if raw_candidate_batch.height:
+                self.con.register("raw_candidate_batch", raw_candidate_batch.to_arrow())
+                rawdf=self.con.execute("SELECT r.rid,c.entity_id FROM raw_candidate_batch r JOIN tr_cand c ON r.gid=c.gid").pl()
+                self.con.unregister("raw_candidate_batch")
+                for sid in [x[1] for x in chunk]:
+                    gtids=gt_by_id.get(sid,set())
+                    raw_gt += len(gtids)
+                    got=set(rawdf.filter(pl.col("rid")==chunk[[x[0] for x in chunk].index(next(r for r in chunk if r[1]==sid))][0])["entity_id"].to_list()) if False else set()
+                    if gtids:
+                        rid_map={x[1]:x[0] for x in chunk}
+                        got=set(rawdf.filter(pl.col("rid")==rid_map[sid])["entity_id"].to_list())
+                        raw_pos += len(gtids & got)
+                raw_counts.extend([int(x) for x in rawdf.group_by("rid").len()["len"].to_list()])
             feats=self.feature_rows("tr",cand)
-            for sid in [x[1] for x in chunk]:
-                gtids=gt_by_id.get(sid,set())
-                raw_gt += len(gtids)
-                if feats.height:
-                    got=set(feats.filter(pl.col("s1_id")==sid)["entity_id"].to_list())
-                    raw_pos += len(gtids & got)
-            if feats.height:
-                raw_counts.extend([int(x) for x in feats.group_by("s1_id").len()["len"].to_list()])
             train_ids={x[0] for x in train_sample}; mask=np.array([r in train_ids for r in feats["rid"].to_list()])
             tr=feats.filter(pl.Series(mask)); va=feats.filter(pl.Series(~mask))
             # Keep every positive but bound training negatives per entity.
@@ -409,7 +415,20 @@ class ScalableER:
         return {"rows":total,"matching_results":str(match_path),"candidate_pairs":str(cand_path)}
 
     def validate_submission(self) -> dict:
-        return {"ran":False,"note":"Run the supplied official validator after predict; scalable pipeline writes one row per test S1."}
+        validator=self.paths.validator
+        if validator is None:
+            raise FileNotFoundError("utils/validate_submission.py was not found")
+        cmd=[sys.executable,str(validator),"--matching",str(self.cfg.output_dir/"matching_results.tsv"),
+             "--candidate",str(self.cfg.output_dir/"candidate_pairs.tsv"),
+             "--test-dir",str(self.paths.root/"dataset"/"test")]
+        p=subprocess.run(cmd,capture_output=True,text=True)
+        report={"ran":True,"pass_":p.returncode==0,"returncode":p.returncode,
+                "stdout":p.stdout,"stderr":p.stderr}
+        write_json(self.cfg.reports_dir/"submission_validation.json",report)
+        if p.returncode!=0:
+            raise RuntimeError("Official submission validator failed:\\n"+p.stdout+"\\n"+p.stderr)
+        LOG.info("OFFICIAL VALIDATOR: PASS")
+        return report
 
     def profile(self):
         from .data_profile import build_profile
