@@ -24,7 +24,8 @@ from pathlib import Path
 # allow "python run_pipeline.py" from inside the project directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.pipeline import Pipeline, load_config  # noqa: E402
+from src.pipeline import Pipeline, load_config
+from src.scalable_pipeline import ScalableER  # noqa: E402
 from src.utils import LOG, human_seconds, bytes_to_human as human_bytes  # noqa: E402
 
 
@@ -59,38 +60,63 @@ def main(argv=None) -> int:
         cfg.models_dir = Path(args.models_dir)
 
     t0 = time.perf_counter()
-    pipeline = Pipeline(cfg, data_root=args.data_root)
-
     if args.stage == "profile":
+        pipeline = Pipeline(cfg, data_root=args.data_root)
         pipeline.profile()
-    elif args.stage == "train":
-        pipeline.train()
+    elif args.stage in ("train", "predict"):
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            if args.stage == "train":
+                scalable.train()
+            else:
+                scalable.predict()
+        finally:
+            scalable.close()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
     elif args.stage == "validate":
-        pipeline.validate()
-    elif args.stage == "predict":
-        pipeline.predict()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
+        result_path = cfg.reports_dir / "validation_results.json"
+        if result_path.exists():
+            LOG.info("validation artifact already exists: %s", result_path)
+        else:
+            scalable = ScalableER(cfg, data_root=args.data_root)
+            try:
+                scalable.train()
+            finally:
+                scalable.close()
     elif args.stage == "validate-submission":
-        pipeline.validate_submission()
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            scalable.validate_submission()
+        finally:
+            scalable.close()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
     elif args.stage == "report":
+        pipeline = Pipeline(cfg, data_root=args.data_root)
         from src.reporting import generate_final_report
-
         p = generate_final_report(cfg.reports_dir, cfg.models_dir, cfg.output_dir)
         LOG.info("wrote %s", p)
     elif args.stage == "all":
-        summary = pipeline.run_all()
+        scalable = ScalableER(cfg, data_root=args.data_root)
+        try:
+            train_summary = scalable.train()
+            predict_summary = scalable.predict()
+        finally:
+            scalable.close()
+        pipeline = Pipeline(cfg, data_root=args.data_root)
+        submission_summary = pipeline.validate_submission()
+        summary = {"train": train_summary, "predict": predict_summary,
+                   "submission": submission_summary}
         if args.zip:
             from build_zip import build_submission_zip
-
             team = args.team_name or cfg.section("submission").get("team_name", "team")
-            path = build_submission_zip(
-                pipeline.cfg, team_name=team, project_dir=Path(__file__).resolve().parent
-            )
+            path = build_submission_zip(cfg, team_name=team, project_dir=Path(__file__).resolve().parent)
             LOG.info("submission zip: %s", path)
             summary["zip"] = str(path)
-        _print_final_report(pipeline, summary)
         Path(cfg.reports_dir / "run_summary.json").write_text(
             json.dumps(summary, indent=2, default=str), encoding="utf-8"
         )
+
 
     LOG.info("stage '%s' finished in %s", args.stage, human_seconds(time.perf_counter() - t0))
     return 0
