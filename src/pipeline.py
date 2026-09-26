@@ -32,6 +32,8 @@ from .candidates import (
     CandidatePair,
     evaluate_candidate_recall,
     generate_candidates,
+    generate_candidates_streaming,
+    block_recall_diagnostic,
 )
 from .decision import (
     DecisionConfig,
@@ -78,6 +80,7 @@ class Config:
         self.models_dir = Path(p.get("models_dir", "models"))
         self.experiments_dir = Path(p.get("experiments_dir", "experiments"))
         self.artifacts_dir = Path(p.get("artifacts_dir", "artifacts"))
+        self.duckdb_path = p.get("duckdb_path")
 
     def section(self, name: str) -> dict:
         return dict(self.raw.get(name, {}) or {})
@@ -181,8 +184,24 @@ class Pipeline:
             s1, cand_tables, cs, stats, labels = self._prepare_train()
 
         block_cfg = blocking_config_from(self.cfg.section("blocking"))
+        stream_cfg = self.cfg.section("streaming")
+        use_duckdb = stream_cfg.get("use_duckdb", False)
+        duckdb_path = self.cfg.duckdb_path
+
         with timed("build_indexes", timings):
-            bi = build_blocking_index(cs, stats, block_cfg)
+            bi = build_blocking_index(cs, stats, block_cfg, use_duckdb=use_duckdb, duckdb_path=duckdb_path)
+        
+        # Run block recall diagnostic BEFORE full candidate generation
+        stream_cfg = self.cfg.section("streaming")
+        block_recall_sample = stream_cfg.get("block_recall_sample", 1000)
+        if block_recall_sample > 0:
+            LOG.info("=== BLOCK RECALL DIAGNOSTIC (sample=%d) ===", block_recall_sample)
+            with timed("block_recall_diagnostic", timings):
+                block_reports = block_recall_diagnostic(s1, cs, bi, block_cfg, labels.positives, sample_size=block_recall_sample)
+                self._write_block_recall_report(block_reports)
+        else:
+            LOG.info("=== BLOCK RECALL DIAGNOSTIC DISABLED ===")
+        
         with timed("generate_candidates", timings):
             pairs = generate_candidates(s1, bi, block_cfg)
         LOG.info("candidate pairs: %d (%.2f/S1)", len(pairs), len(pairs) / max(1, s1.n))
@@ -356,6 +375,19 @@ class Pipeline:
             "mining": mining_info,
         }
 
+    def _write_block_recall_report(self, reports: List) -> None:
+        """Write block-level recall diagnostic report."""
+        path = self.cfg.reports_dir / "block_recall_diagnostic.csv"
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(["block_name", "positive_pairs_found", "positive_recall", 
+                       "candidate_count", "mean_candidates_per_s1", "p95_candidates", "p99_candidates"])
+            for r in reports:
+                w.writerow([r.block_name, r.positive_pairs_found, f"{r.positive_recall:.6f}",
+                           r.candidate_count, f"{r.mean_candidates_per_s1:.2f}", 
+                           f"{r.p95_candidates:.1f}", f"{r.p99_candidates:.1f}"])
+        LOG.info("wrote block recall diagnostic to %s", path)
+
     # ---------------- validate ---------------- #
     def validate(self) -> dict:
         """Evaluate the saved model + decision config on the held-out fold."""
@@ -411,6 +443,7 @@ class Pipeline:
         bundle = read_json(self.cfg.models_dir / "artifacts_bundle.json")
         dec_cfg = DecisionConfig(**bundle["decision"])
         block_cfg = BlockingConfig(**bundle["blocking"])
+        stream_cfg = self.cfg.section("streaming")
 
         import lightgbm as lgb
 
@@ -426,17 +459,27 @@ class Pipeline:
         # frequency stats are recomputed from the *provided test data* only
         stats = idx.build_frequency_stats([s1] + list(cand_tables.values()))
 
-        bi = build_blocking_index(cs, stats, block_cfg)
-        pairs = generate_candidates(s1, bi, block_cfg)
-        LOG.info("test candidate pairs: %d (%.2f/S1)", len(pairs), len(pairs) / max(1, s1.n))
-        extractor = FeatureExtractor(s1, cs, stats, bi, rare_df=block_cfg.rare_name_token_df)
-        X = extractor.extract(pairs)
+        # Use streaming candidate generation for test inference
+        batch_size = stream_cfg.get("batch_size_s1", 25000)
+        max_candidates = stream_cfg.get("max_candidates_per_s1", 1000)
+        
+        LOG.info("generating test candidates in streaming mode (batch_size=%d)", batch_size)
+        all_pairs: List[CandidatePair] = []
+        for batch_pairs in generate_candidates_streaming(s1, build_blocking_index(cs, stats, block_cfg), 
+                                                          block_cfg, batch_size=batch_size, 
+                                                          max_candidates_per_s1=max_candidates):
+            all_pairs.extend(batch_pairs)
+        
+        LOG.info("test candidate pairs: %d (%.2f/S1)", len(all_pairs), len(all_pairs) / max(1, s1.n))
+        extractor = FeatureExtractor(s1, cs, stats, build_blocking_index(cs, stats, block_cfg), 
+                                     rare_df=block_cfg.rare_name_token_df)
+        X = extractor.extract(all_pairs)
         probs = calibrator.transform(booster.predict(X, num_iteration=bundle.get("best_iteration") or None))
 
-        preds = apply_decision(pairs, probs, s1.n, cs.order, cs.source_of, dec_cfg)
+        preds = apply_decision(all_pairs, probs, s1.n, cs.order, cs.source_of, dec_cfg)
 
         write_matching_results(self.cfg.output_dir / "matching_results.tsv", s1.entity_ids, preds, cs)
-        write_candidate_pairs(self.cfg.output_dir / "candidate_pairs.tsv", s1.entity_ids, pairs, cs)
+        write_candidate_pairs(self.cfg.output_dir / "candidate_pairs.tsv", s1.entity_ids, all_pairs, cs)
 
         n_matched = sum(len(v) for v in preds.values())
         n_nonempty = sum(1 for v in preds.values() if v)
@@ -590,7 +633,7 @@ class Pipeline:
             "experiment_id": kw["experiment_id"],
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "feature_version": f"v1_n{len(FEATURE_NAMES)}",
-            "blocking_version": "multiblock_v1_10blocks",
+            "blocking_version": "multiblock_v1_12blocks",
             "model_version": "lightgbm_v1",
             "train_size": kw["train_size"],
             "validation_size": kw["val_size"],

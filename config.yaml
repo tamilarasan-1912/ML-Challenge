@@ -10,6 +10,7 @@ paths:
   models_dir: models
   experiments_dir: experiments
   artifacts_dir: artifacts
+  duckdb_path: artifacts/index.duckdb   # disk-backed index for streaming
 
 profile:
   sample_rows: null          # null -> full files
@@ -30,10 +31,20 @@ blocking:
   max_candidates_per_block: 200
   min_shared_tokens: 1
   postal_max_postings: 20000
+  housenumber_max_postings: 20000
 
 split:
   train_fraction: 0.8        # entity-level split
   n_folds: 1                 # 1 -> single split; >1 -> grouped CV
+
+# Streaming / batch processing (NEW - for memory safety)
+streaming:
+  batch_size_s1: 25000       # S1 entities per batch during candidate gen / inference
+  batch_size_pairs: 500000   # max pairs per feature extraction batch
+  max_candidates_per_s1: 1000 # hard cap per S1 entity
+  use_duckdb: true           # use disk-backed indexes
+  release_memory: true       # explicitly release between batches
+  block_recall_sample: 1000  # sample size for block recall diagnostic (0 to disable)
 
 hard_negative_mining:
   keep_very_hard: true

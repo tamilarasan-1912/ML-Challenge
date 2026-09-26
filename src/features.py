@@ -88,11 +88,28 @@ FEATURE_NAMES: List[str] = [
     "number_of_blocks",
     "name_retrieval_rank",
     "ngram_retrieval_rank",
+    "addr_retrieval_rank",
     "cand_is_s3",
+    # ---- NEW: multi-block evidence ----
+    "exact_block_count",
+    "strong_block_count",
+    "weak_block_count",
+    "block_bitmask",
+    "block_count",
 ]
 
 FEATURE_INDEX: Dict[str, int] = {n: i for i, n in enumerate(FEATURE_NAMES)}
 N_FEATURES = len(FEATURE_NAMES)
+
+# Block classification for multi-block evidence features
+STRONG_BLOCKS = {
+    "exact_name", "core_name", "exact_address", "name_housenumber", 
+    "postal_name", "exact_name_heavy"
+}
+WEAK_BLOCKS = {
+    "rare_name_token", "rare_addr_token", "char_ngram", 
+    "token_overlap", "country_approx", "addr_ngram"
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -357,7 +374,29 @@ class FeatureExtractor:
             row[o] = p.n_blocks
             row[o + 1] = float(min(p.name_retrieval_rank, 1000))
             row[o + 2] = float(min(p.ngram_retrieval_rank, 1000))
-            row[o + 3] = 1.0 if int(cs.source_of[g]) == 1 else 0.0
+            row[o + 3] = float(min(p.addr_retrieval_rank, 1000))
+            row[o + 4] = 1.0 if int(cs.source_of[g]) == 1 else 0.0
+            
+            # ---------------- NEW: multi-block evidence ----------------
+            # Count blocks by strength
+            exact_block_count = 0
+            strong_block_count = 0
+            weak_block_count = 0
+            
+            for bname in BLOCK_NAMES:
+                if p.blocks & BLOCKS[bname]:
+                    if bname in STRONG_BLOCKS:
+                        strong_block_count += 1
+                        if "exact" in bname or bname == "core_name" or bname == "name_housenumber":
+                            exact_block_count += 1
+                    elif bname in WEAK_BLOCKS:
+                        weak_block_count += 1
+            
+            row[o + 5] = exact_block_count
+            row[o + 6] = strong_block_count
+            row[o + 7] = weak_block_count
+            row[o + 8] = float(p.blocks)
+            row[o + 9] = p.n_blocks  # total block count (already at o)
 
             if log_every and (r + 1) % log_every == 0:
                 LOG.info("  features: %d/%d pairs", r + 1, n)

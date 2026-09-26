@@ -1,6 +1,6 @@
 """Candidate generation: the multi-block union feeding the matcher.
 
-For every Source-1 entity we retrieve candidates from up to ten blocks and merge
+For every Source-1 entity we retrieve candidates from up to 12 blocks and merge
 them into a single candidate set, recording the provenance bitmask for each
 candidate. Only this *final* candidate set is materialised (never an S1 x S2/S3
 cross product).
@@ -9,18 +9,20 @@ Compatibility gates (country, name) are applied per block so that, for example,
 a postal-only shared 5-digit number does not by itself import a candidate from a
 different country with an unrelated name. This is a recall/precision trade-off
 that we re-measure in ``candidates.evaluate_candidate_recall``.
+
+NEW: Streaming/batch processing to avoid OOM on large datasets.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Iterator
 
 import numpy as np
 from rapidfuzz import fuzz
 
 from . import indexing as idx
 from .blocking import BLOCKS, BLOCK_NAMES, BlockingIndex, BlockingConfig
-from .indexing import CandidateSpace
+from .indexing import CandidateSpace, SourceTable
 from .utils import LOG
 
 
@@ -47,26 +49,28 @@ def _capped(pairs: Iterable[Tuple[int, float]], cap: int) -> List[Tuple[int, flo
 
 
 def generate_candidates(
-    s1: "SourceTable",
+    s1: SourceTable,
     bi: BlockingIndex,
     cfg: BlockingConfig,
     log_every: int = 20000,
+    max_candidates_per_s1: int = 1000,
 ) -> List[CandidatePair]:
     """Generate the merged candidate set for every S1 entity."""
     cs = bi.cs
     out: List[CandidatePair] = []
     N1 = s1.n
 
-    # Precompute per-candidate character n-gram sets lazily via the index (we
-    # only need overlap counts, computed from postings).
     for i in range(N1):
         name_l = s1.name_light[i]
         name_c = s1.name_core[i]
         name_h = s1.name_heavy[i]
         name_toks = s1.name_tokens[i]
         core_toks = s1.name_core_tokens[i]
+        name_ngrams = s1.name_char_ngrams[i]
         addr_l = s1.addr_light[i]
+        addr_h = s1.addr_heavy[i]
         addr_toks = s1.addr_tokens[i]
+        addr_ngrams = s1.addr_char_ngrams[i]
         postals = s1.postals[i]
         house = s1.house_no[i]
         country = s1.country_norm[i]
@@ -81,32 +85,39 @@ def generate_candidates(
             p.blocks |= bit
             return p
 
-        # ---- Block 1: country + normalized name -------------------------
+        # ---- Block 1: country + normalized name (light) -------------------------
         if name_l:
             for gid in bi.idx_exact_name.get(name_l, ())[: cfg.max_candidates_per_block]:
                 if country and cs.country_norm[gid] != country:
                     continue
                 add(int(gid), BLOCKS["exact_name"])
 
-        # ---- Block 2: country + core name -------------------------------
+        # ---- Block 1b: country + exact heavy normalized name --------------------
+        if name_h:
+            for gid in bi.idx_exact_name_heavy.get(name_h, ())[: cfg.max_candidates_per_block]:
+                if country and cs.country_norm[gid] != country:
+                    continue
+                add(int(gid), BLOCKS["exact_name_heavy"])
+
+        # ---- Block 2: country + core name ---------------------------------------
         if name_c:
             for gid in bi.idx_core_name.get(name_c, ())[: cfg.max_candidates_per_block]:
                 if country and cs.country_norm[gid] != country:
                     continue
                 add(int(gid), BLOCKS["core_name"])
 
-        # ---- Block 3: exact normalized address --------------------------
+        # ---- Block 3: exact normalized address ----------------------------------
         if addr_l:
             for gid in bi.idx_exact_addr.get(addr_l, ())[: cfg.max_candidates_per_block]:
                 add(int(gid), BLOCKS["exact_address"])
 
-        # ---- Block 4: name + house number -------------------------------
+        # ---- Block 4: name + house number ---------------------------------------
         if name_l and house:
             key = f"{name_l}|{house}"
             for gid in bi.idx_name_houseno.get(key, ())[: cfg.max_candidates_per_block]:
                 add(int(gid), BLOCKS["name_housenumber"])
 
-        # ---- Block 5: postal + compatible name --------------------------
+        # ---- Block 5: postal + compatible name ----------------------------------
         for pc in postals:
             post = bi.idx_postal.get(pc)
             if post is None or len(post) > cfg.postal_max_postings:
@@ -124,7 +135,7 @@ def generate_candidates(
             for gid, _ in _capped(kept, cfg.max_candidates_per_block):
                 add(int(gid), BLOCKS["postal_name"])
 
-        # ---- Block 6: rare business-name token --------------------------
+        # ---- Block 6: rare business-name token ----------------------------------
         rare_name_gids: Dict[int, float] = {}
         for t in set(core_toks):
             if len(t) < cfg.min_token_len:
@@ -141,7 +152,7 @@ def generate_candidates(
         for gid, _ in _capped(list(rare_name_gids.items()), cfg.max_candidates_per_block):
             add(int(gid), BLOCKS["rare_name_token"])
 
-        # ---- Block 7: rare address token --------------------------------
+        # ---- Block 7: rare address token ----------------------------------------
         rare_addr_gids: Dict[int, float] = {}
         for t in set(addr_toks):
             if len(t) < cfg.min_token_len or t.isdigit():
@@ -158,12 +169,11 @@ def generate_candidates(
         for gid, _ in _capped(list(rare_addr_gids.items()), cfg.max_candidates_per_block):
             add(int(gid), BLOCKS["rare_addr_token"])
 
-        # ---- Block 8: character n-gram retrieval ------------------------
-        grams = idx.char_ngrams(name_l, n=cfg.ngram_n, max_grams=cfg.ngram_max_grams)
-        if grams:
+        # ---- Block 8: name character n-gram retrieval ---------------------------
+        if name_ngrams:
             ng_counts: Dict[int, int] = {}
-            for g in grams:
-                post = bi.idx_ngram.get(g)
+            for g in name_ngrams:
+                post = bi.idx_name_ngram.get(g)
                 if post is None:
                     continue
                 for gid in post.tolist():
@@ -173,9 +183,24 @@ def generate_candidates(
             for rank, (gid, cnt) in enumerate(cand[: cfg.max_candidates_per_block]):
                 p = add(int(gid), BLOCKS["char_ngram"])
                 p.ngram_retrieval_rank = min(p.ngram_retrieval_rank, rank)
-                p.ngram_jaccard = cnt / max(1, len(grams))
+                p.ngram_jaccard = cnt / max(1, len(name_ngrams))
 
-        # ---- Block 9: token-overlap retrieval ---------------------------
+        # ---- Block 8b: address character n-gram retrieval -----------------------
+        if addr_ngrams:
+            ng_counts: Dict[int, int] = {}
+            for g in addr_ngrams:
+                post = bi.idx_addr_ngram.get(g)
+                if post is None:
+                    continue
+                for gid in post.tolist():
+                    ng_counts[gid] = ng_counts.get(gid, 0) + 1
+            cand = [(g, c) for g, c in ng_counts.items() if c >= 2]
+            cand.sort(key=lambda x: -x[1])
+            for rank, (gid, cnt) in enumerate(cand[: cfg.max_candidates_per_block]):
+                p = add(int(gid), BLOCKS["addr_ngram"])
+                p.addr_retrieval_rank = min(p.addr_retrieval_rank, rank)
+
+        # ---- Block 9: token-overlap retrieval -----------------------------------
         tok_counts: Dict[int, int] = {}
         for t in set(core_toks):
             if len(t) < cfg.min_token_len:
@@ -196,14 +221,21 @@ def generate_candidates(
             p.token_overlap = max(p.token_overlap, ov)
             p.name_retrieval_rank = min(p.name_retrieval_rank, rank)
 
-        # ---- Block 10: country-aware approximate retrieval --------------
-        # Restrict to same/near country partition when names look related.
+        # ---- Block 10: country-aware approximate retrieval ----------------------
         if name_l:
             partition = bi.country_to_gid.get(country)
             if partition is not None and partition.size and partition.size <= 200000:
                 scored = []
                 # only consider docs that already share a token or ngram (cheap gate)
-                pool = set(tok_counts.keys()) | set(ng_counts.keys()) if grams else set(tok_counts.keys())
+                pool = set(tok_counts.keys())
+                if name_ngrams:
+                    ng_counts = {}
+                    for g in name_ngrams:
+                        post = bi.idx_name_ngram.get(g)
+                        if post is not None:
+                            for gid in post.tolist():
+                                ng_counts[gid] = ng_counts.get(gid, 0) + 1
+                    pool |= set(ng_counts.keys())
                 for gid in pool:
                     if cs.country_norm[gid] != country:
                         continue
@@ -227,6 +259,235 @@ def generate_candidates(
             LOG.info("  candidates: %d/%d S1 processed (%d pairs)", i + 1, N1, len(out))
 
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Streaming candidate generation (batched for memory efficiency)
+# --------------------------------------------------------------------------- #
+def generate_candidates_streaming(
+    s1: SourceTable,
+    bi: BlockingIndex,
+    cfg: BlockingConfig,
+    batch_size: int = 25000,
+    max_candidates_per_s1: int = 1000,
+    log_every: int = 5000,
+) -> Iterator[List[CandidatePair]]:
+    """Generate candidates in batches to avoid OOM on large datasets.
+    
+    Yields lists of CandidatePair for each batch of S1 entities.
+    """
+    cs = bi.cs
+    N1 = s1.n
+    for batch_start in range(0, N1, batch_size):
+        batch_end = min(batch_start + batch_size, N1)
+        batch_pairs: List[CandidatePair] = []
+        
+        for i in range(batch_start, batch_end):
+            name_l = s1.name_light[i]
+            name_c = s1.name_core[i]
+            name_h = s1.name_heavy[i]
+            name_toks = s1.name_tokens[i]
+            core_toks = s1.name_core_tokens[i]
+            name_ngrams = s1.name_char_ngrams[i]
+            addr_l = s1.addr_light[i]
+            addr_h = s1.addr_heavy[i]
+            addr_toks = s1.addr_tokens[i]
+            addr_ngrams = s1.addr_char_ngrams[i]
+            postals = s1.postals[i]
+            house = s1.house_no[i]
+            country = s1.country_norm[i]
+
+            acc: Dict[int, CandidatePair] = {}
+
+            def add(gid: int, bit: int) -> CandidatePair:
+                p = acc.get(gid)
+                if p is None:
+                    p = CandidatePair(s1_index=i, gid=gid)
+                    acc[gid] = p
+                p.blocks |= bit
+                return p
+
+            # Block 1: country + normalized name (light)
+            if name_l:
+                for gid in bi.idx_exact_name.get(name_l, ())[: cfg.max_candidates_per_block]:
+                    if country and cs.country_norm[gid] != country:
+                        continue
+                    add(int(gid), BLOCKS["exact_name"])
+
+            # Block 1b: country + exact heavy normalized name
+            if name_h:
+                for gid in bi.idx_exact_name_heavy.get(name_h, ())[: cfg.max_candidates_per_block]:
+                    if country and cs.country_norm[gid] != country:
+                        continue
+                    add(int(gid), BLOCKS["exact_name_heavy"])
+
+            # Block 2: country + core name
+            if name_c:
+                for gid in bi.idx_core_name.get(name_c, ())[: cfg.max_candidates_per_block]:
+                    if country and cs.country_norm[gid] != country:
+                        continue
+                    add(int(gid), BLOCKS["core_name"])
+
+            # Block 3: exact normalized address
+            if addr_l:
+                for gid in bi.idx_exact_addr.get(addr_l, ())[: cfg.max_candidates_per_block]:
+                    add(int(gid), BLOCKS["exact_address"])
+
+            # Block 4: name + house number
+            if name_l and house:
+                key = f"{name_l}|{house}"
+                for gid in bi.idx_name_houseno.get(key, ())[: cfg.max_candidates_per_block]:
+                    add(int(gid), BLOCKS["name_housenumber"])
+
+            # Block 5: postal + compatible name
+            for pc in postals:
+                post = bi.idx_postal.get(pc)
+                if post is None or len(post) > cfg.postal_max_postings:
+                    continue
+                kept = []
+                for gid in post.tolist():
+                    cname = cs.name_light[gid]
+                    if name_l and cname:
+                        sim = fuzz.token_set_ratio(name_l, cname) / 100.0
+                        if sim < 0.5:
+                            continue
+                        kept.append((gid, sim))
+                    else:
+                        kept.append((gid, 0.4))
+                for gid, _ in _capped(kept, cfg.max_candidates_per_block):
+                    add(int(gid), BLOCKS["postal_name"])
+
+            # Block 6: rare business-name token
+            rare_name_gids: Dict[int, float] = {}
+            for t in set(core_toks):
+                if len(t) < cfg.min_token_len:
+                    continue
+                df = bi.stats.name_token_freq.get(t, 0)
+                if df == 0 or df > cfg.rare_name_token_df:
+                    continue
+                post = bi.idx_name_token.get(t)
+                if post is None:
+                    continue
+                w = bi.idf_name.get(t, 1.0)
+                for gid in post.tolist():
+                    rare_name_gids[gid] = rare_name_gids.get(gid, 0.0) + w
+            for gid, _ in _capped(list(rare_name_gids.items()), cfg.max_candidates_per_block):
+                add(int(gid), BLOCKS["rare_name_token"])
+
+            # Block 7: rare address token
+            rare_addr_gids: Dict[int, float] = {}
+            for t in set(addr_toks):
+                if len(t) < cfg.min_token_len or t.isdigit():
+                    continue
+                df = bi.stats.addr_token_freq.get(t, 0)
+                if df == 0 or df > cfg.rare_addr_token_df:
+                    continue
+                post = bi.idx_addr_token.get(t)
+                if post is None:
+                    continue
+                w = bi.idf_addr.get(t, 1.0)
+                for gid in post.tolist():
+                    rare_addr_gids[gid] = rare_addr_gids.get(gid, 0.0) + w
+            for gid, _ in _capped(list(rare_addr_gids.items()), cfg.max_candidates_per_block):
+                add(int(gid), BLOCKS["rare_addr_token"])
+
+            # Block 8: name character n-gram retrieval
+            if name_ngrams:
+                ng_counts: Dict[int, int] = {}
+                for g in name_ngrams:
+                    post = bi.idx_name_ngram.get(g)
+                    if post is None:
+                        continue
+                    for gid in post.tolist():
+                        ng_counts[gid] = ng_counts.get(gid, 0) + 1
+                cand = [(g, c) for g, c in ng_counts.items() if c >= 2]
+                cand.sort(key=lambda x: -x[1])
+                for rank, (gid, cnt) in enumerate(cand[: cfg.max_candidates_per_block]):
+                    p = add(int(gid), BLOCKS["char_ngram"])
+                    p.ngram_retrieval_rank = min(p.ngram_retrieval_rank, rank)
+                    p.ngram_jaccard = cnt / max(1, len(name_ngrams))
+
+            # Block 8b: address character n-gram retrieval
+            if addr_ngrams:
+                ng_counts: Dict[int, int] = {}
+                for g in addr_ngrams:
+                    post = bi.idx_addr_ngram.get(g)
+                    if post is None:
+                        continue
+                    for gid in post.tolist():
+                        ng_counts[gid] = ng_counts.get(gid, 0) + 1
+                cand = [(g, c) for g, c in ng_counts.items() if c >= 2]
+                cand.sort(key=lambda x: -x[1])
+                for rank, (gid, cnt) in enumerate(cand[: cfg.max_candidates_per_block]):
+                    p = add(int(gid), BLOCKS["addr_ngram"])
+                    p.addr_retrieval_rank = min(p.addr_retrieval_rank, rank)
+
+            # Block 9: token-overlap retrieval
+            tok_counts: Dict[int, int] = {}
+            for t in set(core_toks):
+                if len(t) < cfg.min_token_len:
+                    continue
+                post = bi.idx_name_token.get(t)
+                if post is None or len(post) > cfg.name_token_max_postings:
+                    continue
+                for gid in post.tolist():
+                    tok_counts[gid] = tok_counts.get(gid, 0) + 1
+            cand9 = [
+                (g, c / max(1, len(set(core_toks))))
+                for g, c in tok_counts.items()
+                if c >= cfg.min_shared_tokens
+            ]
+            cand9.sort(key=lambda x: -x[1])
+            for rank, (gid, ov) in enumerate(cand9[: cfg.max_candidates_per_block]):
+                p = add(int(gid), BLOCKS["token_overlap"])
+                p.token_overlap = max(p.token_overlap, ov)
+                p.name_retrieval_rank = min(p.name_retrieval_rank, rank)
+
+            # Block 10: country-aware approximate retrieval
+            if name_l:
+                partition = bi.country_to_gid.get(country)
+                if partition is not None and partition.size and partition.size <= 200000:
+                    scored = []
+                    pool = set(tok_counts.keys())
+                    if name_ngrams:
+                        ng_counts = {}
+                        for g in name_ngrams:
+                            post = bi.idx_name_ngram.get(g)
+                            if post is not None:
+                                for gid in post.tolist():
+                                    ng_counts[gid] = ng_counts.get(gid, 0) + 1
+                        pool |= set(ng_counts.keys())
+                    for gid in pool:
+                        if cs.country_norm[gid] != country:
+                            continue
+                        sim = fuzz.token_set_ratio(name_l, cs.name_light[gid]) / 100.0
+                        if sim >= 0.60:
+                            scored.append((gid, sim))
+                    scored.sort(key=lambda x: -x[1])
+                    for gid, _ in scored[: cfg.max_candidates_per_block]:
+                        add(int(gid), BLOCKS["country_approx"])
+
+            # finalise metrics for this entity
+            for p in acc.values():
+                p.n_blocks = int(bin(p.blocks).count("1"))
+                ctoks = set(cs.name_core_tokens[p.gid])
+                if core_toks and ctoks:
+                    shared = set(core_toks) & ctoks
+                    p.idf_overlap = sum(bi.idf_name.get(t, 1.0) for t in shared)
+
+            # Cap candidates per S1 if too many
+            entity_pairs = list(acc.values())
+            if len(entity_pairs) > max_candidates_per_s1:
+                # Sort by n_blocks descending, then by idf_overlap
+                entity_pairs.sort(key=lambda x: (-x.n_blocks, -x.idf_overlap))
+                entity_pairs = entity_pairs[:max_candidates_per_s1]
+            
+            batch_pairs.extend(entity_pairs)
+
+        if log_every and (batch_end % log_every == 0 or batch_end == N1):
+            LOG.info("  candidates: %d/%d S1 processed (%d pairs in batch)", batch_end, N1, len(batch_pairs))
+
+        yield batch_pairs
 
 
 # --------------------------------------------------------------------------- #
@@ -257,7 +518,7 @@ class RecallReport:
 
 
 def evaluate_candidate_recall(
-    s1,
+    s1: SourceTable,
     cs: CandidateSpace,
     pairs: Sequence[CandidatePair],
     positives: Dict[int, set],          # s1_index -> set(gid)
@@ -325,3 +586,278 @@ def evaluate_candidate_recall(
         for c, v in sorted(country_hit.items(), key=lambda kv: -kv[1][1])
     }
     return rep, counts
+
+
+# --------------------------------------------------------------------------- #
+# Candidate recall diagnostic per block
+# --------------------------------------------------------------------------- #
+@dataclass
+class BlockRecallReport:
+    block_name: str
+    positive_pairs_found: int
+    positive_recall: float
+    candidate_count: int
+    mean_candidates_per_s1: float
+    p95_candidates: float
+    p99_candidates: float
+
+
+def block_recall_diagnostic(
+    s1: SourceTable,
+    cs: CandidateSpace,
+    bi: BlockingIndex,
+    cfg: BlockingConfig,
+    positives: Dict[int, set],
+    sample_size: Optional[int] = None,
+) -> List[BlockRecallReport]:
+    """Run candidate recall diagnostic for each block independently.
+    
+    This helps identify which blocks contribute most to recall and their cost.
+    """
+    from collections import defaultdict
+    
+    N1 = s1.n if sample_size is None else min(s1.n, sample_size)
+    reports = []
+    
+    # Collect all candidate pairs per block
+    block_pairs: Dict[str, List[CandidatePair]] = defaultdict(list)
+    block_counts: Dict[str, np.ndarray] = defaultdict(lambda: np.zeros(N1, dtype=np.int64))
+    block_found: Dict[str, Dict[int, set]] = defaultdict(lambda: defaultdict(set))
+    
+    for i in range(N1):
+        name_l = s1.name_light[i]
+        name_c = s1.name_core[i]
+        name_h = s1.name_heavy[i]
+        name_toks = s1.name_tokens[i]
+        core_toks = s1.name_core_tokens[i]
+        name_ngrams = s1.name_char_ngrams[i]
+        addr_l = s1.addr_light[i]
+        addr_toks = s1.addr_tokens[i]
+        addr_ngrams = s1.addr_char_ngrams[i]
+        postals = s1.postals[i]
+        house = s1.house_no[i]
+        country = s1.country_norm[i]
+        
+        # Test each block independently
+        blocks_to_test = [
+            ("exact_name", lambda: _block_exact_name(i, name_l, country, bi, cs, cfg)),
+            ("core_name", lambda: _block_core_name(i, name_c, country, bi, cs, cfg)),
+            ("exact_name_heavy", lambda: _block_exact_name_heavy(i, name_h, country, bi, cs, cfg)),
+            ("exact_address", lambda: _block_exact_addr(i, addr_l, bi, cs, cfg)),
+            ("name_housenumber", lambda: _block_name_houseno(i, name_l, house, bi, cs, cfg)),
+            ("postal_name", lambda: _block_postal_name(i, name_l, postals, bi, cs, cfg)),
+            ("rare_name_token", lambda: _block_rare_name(i, core_toks, bi, cs, cfg)),
+            ("rare_addr_token", lambda: _block_rare_addr(i, addr_toks, bi, cs, cfg)),
+            ("char_ngram", lambda: _block_char_ngram(i, name_ngrams, bi, cs, cfg)),
+            ("addr_ngram", lambda: _block_addr_ngram(i, addr_ngrams, bi, cs, cfg)),
+            ("token_overlap", lambda: _block_token_overlap(i, core_toks, bi, cs, cfg)),
+            ("country_approx", lambda: _block_country_approx(i, name_l, country, bi, cs, cfg, core_toks)),
+        ]
+        
+        for block_name, block_fn in blocks_to_test:
+            cands = block_fn()
+            for gid in cands:
+                block_pairs[block_name].append(CandidatePair(s1_index=i, gid=gid, blocks=BLOCKS[block_name]))
+                block_counts[block_name][i] += 1
+                if i in positives and gid in positives[i]:
+                    block_found[block_name][i].add(gid)
+    
+    n_pos = sum(len(v) for v in positives.values() if v and min(v) < N1)
+    
+    for block_name in BLOCK_NAMES:
+        pairs = block_pairs.get(block_name, [])
+        counts = block_counts.get(block_name, np.zeros(N1, dtype=np.int64))
+        found = block_found.get(block_name, {})
+        
+        n_found = sum(len(v) for v in found.values())
+        n_cand = len(pairs)
+        
+        if n_cand > 0:
+            nonzero = counts[counts > 0]
+            mean_cand = float(counts.mean()) if N1 else 0.0
+            p95 = float(np.percentile(counts, 95)) if N1 else 0.0
+            p99 = float(np.percentile(counts, 99)) if N1 else 0.0
+        else:
+            mean_cand = p95 = p99 = 0.0
+        
+        recall = n_found / n_pos if n_pos > 0 else 1.0
+        
+        reports.append(BlockRecallReport(
+            block_name=block_name,
+            positive_pairs_found=n_found,
+            positive_recall=recall,
+            candidate_count=n_cand,
+            mean_candidates_per_s1=mean_cand,
+            p95_candidates=p95,
+            p99_candidates=p99,
+        ))
+    
+    return reports
+
+
+# Helper functions for block recall diagnostic
+def _block_exact_name(i, name_l, country, bi, cs, cfg):
+    if not name_l:
+        return []
+    cands = []
+    for gid in bi.idx_exact_name.get(name_l, ())[: cfg.max_candidates_per_block]:
+        if country and cs.country_norm[gid] != country:
+            continue
+        cands.append(int(gid))
+    return cands
+
+def _block_core_name(i, name_c, country, bi, cs, cfg):
+    if not name_c:
+        return []
+    cands = []
+    for gid in bi.idx_core_name.get(name_c, ())[: cfg.max_candidates_per_block]:
+        if country and cs.country_norm[gid] != country:
+            continue
+        cands.append(int(gid))
+    return cands
+
+def _block_exact_name_heavy(i, name_h, country, bi, cs, cfg):
+    if not name_h:
+        return []
+    cands = []
+    for gid in bi.idx_exact_name_heavy.get(name_h, ())[: cfg.max_candidates_per_block]:
+        if country and cs.country_norm[gid] != country:
+            continue
+        cands.append(int(gid))
+    return cands
+
+def _block_exact_addr(i, addr_l, bi, cs, cfg):
+    if not addr_l:
+        return []
+    return [int(gid) for gid in bi.idx_exact_addr.get(addr_l, ())[: cfg.max_candidates_per_block]]
+
+def _block_name_houseno(i, name_l, house, bi, cs, cfg):
+    if not name_l or not house:
+        return []
+    key = f"{name_l}|{house}"
+    return [int(gid) for gid in bi.idx_name_houseno.get(key, ())[: cfg.max_candidates_per_block]]
+
+def _block_postal_name(i, name_l, postals, bi, cs, cfg):
+    cands = []
+    for pc in postals:
+        post = bi.idx_postal.get(pc)
+        if post is None or len(post) > cfg.postal_max_postings:
+            continue
+        kept = []
+        for gid in post.tolist():
+            cname = cs.name_light[gid]
+            if name_l and cname:
+                sim = fuzz.token_set_ratio(name_l, cname) / 100.0
+                if sim < 0.5:
+                    continue
+                kept.append((gid, sim))
+            else:
+                kept.append((gid, 0.4))
+        for gid, _ in _capped(kept, cfg.max_candidates_per_block):
+            cands.append(gid)
+    return cands
+
+def _block_rare_name(i, core_toks, bi, cs, cfg):
+    rare_name_gids: Dict[int, float] = {}
+    for t in set(core_toks):
+        if len(t) < cfg.min_token_len:
+            continue
+        df = bi.stats.name_token_freq.get(t, 0)
+        if df == 0 or df > cfg.rare_name_token_df:
+            continue
+        post = bi.idx_name_token.get(t)
+        if post is None:
+            continue
+        w = bi.idf_name.get(t, 1.0)
+        for gid in post.tolist():
+            rare_name_gids[gid] = rare_name_gids.get(gid, 0.0) + w
+    return [gid for gid, _ in _capped(list(rare_name_gids.items()), cfg.max_candidates_per_block)]
+
+def _block_rare_addr(i, addr_toks, bi, cs, cfg):
+    rare_addr_gids: Dict[int, float] = {}
+    for t in set(addr_toks):
+        if len(t) < cfg.min_token_len or t.isdigit():
+            continue
+        df = bi.stats.addr_token_freq.get(t, 0)
+        if df == 0 or df > cfg.rare_addr_token_df:
+            continue
+        post = bi.idx_addr_token.get(t)
+        if post is None:
+            continue
+        w = bi.idf_addr.get(t, 1.0)
+        for gid in post.tolist():
+            rare_addr_gids[gid] = rare_addr_gids.get(gid, 0.0) + w
+    return [gid for gid, _ in _capped(list(rare_addr_gids.items()), cfg.max_candidates_per_block)]
+
+def _block_char_ngram(i, name_ngrams, bi, cs, cfg):
+    if not name_ngrams:
+        return []
+    ng_counts: Dict[int, int] = {}
+    for g in name_ngrams:
+        post = bi.idx_name_ngram.get(g)
+        if post is None:
+            continue
+        for gid in post.tolist():
+            ng_counts[gid] = ng_counts.get(gid, 0) + 1
+    cand = [(g, c) for g, c in ng_counts.items() if c >= 2]
+    cand.sort(key=lambda x: -x[1])
+    return [gid for gid, _ in cand[: cfg.max_candidates_per_block]]
+
+def _block_addr_ngram(i, addr_ngrams, bi, cs, cfg):
+    if not addr_ngrams:
+        return []
+    ng_counts: Dict[int, int] = {}
+    for g in addr_ngrams:
+        post = bi.idx_addr_ngram.get(g)
+        if post is None:
+            continue
+        for gid in post.tolist():
+            ng_counts[gid] = ng_counts.get(gid, 0) + 1
+    cand = [(g, c) for g, c in ng_counts.items() if c >= 2]
+    cand.sort(key=lambda x: -x[1])
+    return [gid for gid, _ in cand[: cfg.max_candidates_per_block]]
+
+def _block_token_overlap(i, core_toks, bi, cs, cfg):
+    tok_counts: Dict[int, int] = {}
+    for t in set(core_toks):
+        if len(t) < cfg.min_token_len:
+            continue
+        post = bi.idx_name_token.get(t)
+        if post is None or len(post) > cfg.name_token_max_postings:
+            continue
+        for gid in post.tolist():
+            tok_counts[gid] = tok_counts.get(gid, 0) + 1
+    cand9 = [
+        (g, c / max(1, len(set(core_toks))))
+        for g, c in tok_counts.items()
+        if c >= cfg.min_shared_tokens
+    ]
+    cand9.sort(key=lambda x: -x[1])
+    return [gid for gid, _ in cand9[: cfg.max_candidates_per_block]]
+
+def _block_country_approx(i, name_l, country, bi, cs, cfg, core_toks=None):
+    if not name_l:
+        return []
+    partition = bi.country_to_gid.get(country)
+    if partition is None or not partition.size or partition.size > 200000:
+        return []
+    scored = []
+    tok_counts = {}
+    if core_toks is not None:
+        for t in set(core_toks):
+            if len(t) < cfg.min_token_len:
+                continue
+            post = bi.idx_name_token.get(t)
+            if post is None or len(post) > cfg.name_token_max_postings:
+                continue
+            for gid in post.tolist():
+                tok_counts[gid] = tok_counts.get(gid, 0) + 1
+    pool = set(tok_counts.keys())
+    for gid in pool:
+        if cs.country_norm[gid] != country:
+            continue
+        sim = fuzz.token_set_ratio(name_l, cs.name_light[gid]) / 100.0
+        if sim >= 0.60:
+            scored.append((gid, sim))
+    scored.sort(key=lambda x: -x[1])
+    return [gid for gid, _ in scored[: cfg.max_candidates_per_block]]

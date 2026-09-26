@@ -1,0 +1,13 @@
+block_name,positive_pairs_found,positive_recall,candidate_count,mean_candidates_per_s1,p95_candidates,p99_candidates
+exact_name,414,0.728873,642,0.64,2.0,4.0
+core_name,751,1.322183,2773,2.77,8.0,9.0
+exact_address,831,1.463028,843,0.84,3.0,4.0
+name_housenumber,414,0.728873,414,0.41,2.0,3.0
+postal_name,475,0.836268,475,0.47,3.0,4.0
+rare_name_token,1080,1.901408,195081,195.08,200.0,200.0
+rare_addr_token,1081,1.903169,200000,200.00,200.0,200.0
+char_ngram,1080,1.901408,199984,199.98,200.0,200.0
+token_overlap,1059,1.864437,195081,195.08,200.0,200.0
+country_approx,1081,1.903169,88499,88.50,141.0,166.0
+addr_ngram,1081,1.903169,200000,200.00,200.0,200.0
+exact_name_heavy,442,0.778169,672,0.67,2.0,4.0

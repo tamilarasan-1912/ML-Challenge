@@ -4,7 +4,7 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 
 ## Dataset statistics
 
-- data root: `/workspace/project/ML-Challenge/dev/synthetic/student_resource`
+- data root: `/workspace/f3031bab-c4f7-4425-9cd8-fb4088af3cb6/sessions/agent_76a2ee95-4c1c-43b9-988c-a40895d1405d/dev/synthetic/student_resource`
 - train S1: 1200 rows (blank names: 0)
 - train S2: 1859 rows (blank names: 0)
 - train S3: 651 rows (blank names: 0)
@@ -18,9 +18,9 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 ## Candidate generation
 
 - candidate recall: 1.0
-- candidate reduction ratio: 0.7899926958831341
-- mean / median candidates per S1: 527.1183333333333 / 518.0
-- p95 / p99 / max candidates: 662.05 / 707.01 / 721.0
+- candidate reduction ratio: 0.7719770916334662
+- mean / median candidates per S1: 572.3375 / 563.0
+- p95 / p99 / max candidates: 717.05 / 757.02 / 801.0
 - positive pairs: 1300 of 1300 retained
 - S1->S2 candidate recall: 1.0 (649/649)
 - S1->S3 candidate recall: 1.0 (651/651)
@@ -66,12 +66,12 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 |---|---|---|
 | 1. exact matching only | 0.204108 | rule-based, no model |
 | 2. + normalization (core name) | 0.092688 | rule-based |
-| 3. + fuzzy name features | 0.937526 |  |
+| 3. + fuzzy name features | 0.93252 |  |
 | 4. + fuzzy address features | 0.8825 |  |
 | 5. + numeric/address features | 0.999491 |  |
-| 6. + multi-blocking features | 0.8825 |  |
+| 6. + multi-blocking features | 0.999491 |  |
 | 7. + rarity features | 0.999491 |  |
-| 8. all features + hard negatives | 0.999491 |  |
+| 8. all features + hard negatives | 0.8825 |  |
 | 9. + calibration + threshold opt | 0.999861 |  |
 | 10. + tuned global threshold | 0.999861 | thr=0.3000 |
 | 11. + source-specific thresholds | 0.999861 | s2=None s3=None |
@@ -86,6 +86,10 @@ All figures below are measured from the supplied dataset by this pipeline. No ex
 | train_1790351081 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.17 | 1332047872 | calib=isotonic;mining_sel=21588 |
 | train_1790351284 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.14 | 1332428800 | calib=isotonic;mining_sel=21588 |
 | train_1790351482 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 33.32 | 1327566848 | calib=isotonic;mining_sel=21588 |
+| train_1790449747 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 41.06 | 1350807552 | calib=isotonic;mining_sel=21588 |
+| train_1790450596 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 56.7 | 1561202688 | calib=isotonic;mining_sel=21588 |
+| train_1790450692 | 0.999491 | 0.992701 | 1.0 | 1.0 | 0.3 | 57.25 | 1571147776 | calib=isotonic;mining_sel=21588 |
+| train_1790451575 | 0.999861 | 0.996337 | 1.0 | 1.0 | 0.3 | 51.76 | 1564143616 | calib=isotonic;mining_sel=21588 |
 
 ## Submission validation
 

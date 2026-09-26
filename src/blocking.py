@@ -30,6 +30,8 @@ BLOCKS: Dict[str, int] = {
     "char_ngram": 1 << 7,        # 8  character n-gram retrieval
     "token_overlap": 1 << 8,     # 9  token-overlap retrieval
     "country_approx": 1 << 9,    # 10 country-aware approximate retrieval
+    "addr_ngram": 1 << 10,       # 11 address character n-gram
+    "exact_name_heavy": 1 << 11, # 12 exact heavy normalized name
 }
 
 BLOCK_NAMES: List[str] = list(BLOCKS.keys())
@@ -61,15 +63,20 @@ class BlockingIndex:
     country_to_gid: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_exact_name: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_core_name: Dict[str, np.ndarray] = field(default_factory=dict)
+    idx_exact_name_heavy: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_exact_addr: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_name_houseno: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_postal: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_name_token: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_addr_token: Dict[str, np.ndarray] = field(default_factory=dict)
-    idx_ngram: Dict[str, np.ndarray] = field(default_factory=dict)
+    idx_name_ngram: Dict[str, np.ndarray] = field(default_factory=dict)
+    idx_addr_ngram: Dict[str, np.ndarray] = field(default_factory=dict)
     idx_prefix: Dict[str, np.ndarray] = field(default_factory=dict)
     idf_name: Dict[str, float] = field(default_factory=dict)
     idf_addr: Dict[str, float] = field(default_factory=dict)
+
+    # DuckDB index for large-scale streaming (optional)
+    duckdb_index: Optional['idx.DuckDBIndex'] = field(default=None, repr=False)
 
     # ------------------------------------------------------------------ #
     def candidate_docs_for_tokens(
@@ -97,6 +104,8 @@ def build_blocking_index(
     cs: CandidateSpace,
     stats: FrequencyStats,
     cfg: BlockingConfig,
+    use_duckdb: bool = False,
+    duckdb_path: Optional[str] = None,
 ) -> BlockingIndex:
     bi = BlockingIndex(cs=cs, cfg=cfg, stats=stats)
 
@@ -109,6 +118,7 @@ def build_blocking_index(
     LOG.info("blocking: building exact-value indexes")
     bi.idx_exact_name = idx.build_value_index(cs.name_light)
     bi.idx_core_name = idx.build_value_index(cs.name_core)
+    bi.idx_exact_name_heavy = idx.build_value_index(cs.name_heavy)
     bi.idx_exact_addr = idx.build_value_index(cs.addr_light)
 
     # name + house number composite key
@@ -121,15 +131,15 @@ def build_blocking_index(
         pdocs, max_postings=cfg.postal_max_postings, min_doc_freq=1
     )
 
-    # rare-token indexes fall back to the same token index; rarity is applied
-    # during retrieval using frequency stats (df threshold).
+    # token indexes
     LOG.info("blocking: building name/address token indexes")
     bi.idx_name_token = idx.build_inverted_index(cs.name_tokens, max_postings=cfg.name_token_max_postings)
     bi.idx_addr_token = idx.build_inverted_index(cs.addr_tokens, max_postings=cfg.addr_token_max_postings)
 
-    LOG.info("blocking: building char n-gram index")
-    ngram_docs = idx.build_ngram_docs(cs.name_light, n=cfg.ngram_n, max_grams=cfg.ngram_max_grams)
-    bi.idx_ngram = idx.build_inverted_index(ngram_docs, max_postings=cfg.ngram_max_postings)
+    # character n-gram indexes
+    LOG.info("blocking: building char n-gram indexes")
+    bi.idx_name_ngram = idx.build_inverted_index(cs.name_char_ngrams, max_postings=cfg.ngram_max_postings)
+    bi.idx_addr_ngram = idx.build_inverted_index(cs.addr_char_ngrams, max_postings=cfg.ngram_max_postings)
 
     LOG.info("blocking: building name prefix index")
     pref_docs = [
@@ -146,12 +156,21 @@ def build_blocking_index(
     ta = stats.total_addrs or 1
     bi.idf_addr = {t: math.log((1 + ta) / (1 + df)) + 1.0 for t, df in stats.addr_token_freq.items()}
 
+    # Initialize DuckDB index if requested
+    if use_duckdb and duckdb_path:
+        bi.duckdb_index = idx.DuckDBIndex(duckdb_path)
+        bi.duckdb_index.populate(cs)
+
     LOG.info(
-        "blocking indexes: name_tok=%d addr_tok=%d ngram=%d exact_name=%d postal=%d",
+        "blocking indexes: name_tok=%d addr_tok=%d name_ngram=%d addr_ngram=%d "
+        "exact_name=%d exact_heavy=%d core_name=%d postal=%d",
         len(bi.idx_name_token),
         len(bi.idx_addr_token),
-        len(bi.idx_ngram),
+        len(bi.idx_name_ngram),
+        len(bi.idx_addr_ngram),
         len(bi.idx_exact_name),
+        len(bi.idx_exact_name_heavy),
+        len(bi.idx_core_name),
         len(bi.idx_postal),
     )
     return bi
