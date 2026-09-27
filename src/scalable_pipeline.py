@@ -149,40 +149,107 @@ class ScalableER:
     def _candidate_sql(self, prefix: str) -> str:
         s1=f"{prefix}_s1"; c=f"{prefix}_cand"
         cap=self.max_candidates
+        # IMPORTANT: never join a batch directly to a high-frequency key.
+        # The eligible-key subqueries are GROUP BY/HAVING filters over the
+        # candidate table, so each surviving blocking key has a hard posting
+        # bound before it participates in the S1 x candidate join.
+        name_cap=200
+        heavy_cap=200
+        core_cap=200
+        addr_cap=200
+        house_cap=100
+        postal_cap=200
         return f"""
-        WITH blocks AS (
-          SELECT s.rid, c.gid, {BLOCKS['exact_name']} AS bit
-          FROM {s1} s JOIN {c} c ON s.country=c.country AND s.name<>'' AND s.name=c.name
+        WITH
+        name_keys AS (
+          SELECT country,name
+          FROM {c}
+          WHERE country<>'' AND name<>''
+          GROUP BY country,name
+          HAVING count(*) <= {name_cap}
+        ),
+        heavy_keys AS (
+          SELECT country,name_heavy
+          FROM {c}
+          WHERE country<>'' AND name_heavy<>''
+          GROUP BY country,name_heavy
+          HAVING count(*) <= {heavy_cap}
+        ),
+        core_keys AS (
+          SELECT country,name_core
+          FROM {c}
+          WHERE country<>'' AND name_core<>''
+          GROUP BY country,name_core
+          HAVING count(*) <= {core_cap}
+        ),
+        addr_keys AS (
+          SELECT addr
+          FROM {c}
+          WHERE addr<>''
+          GROUP BY addr
+          HAVING count(*) <= {addr_cap}
+        ),
+        house_keys AS (
+          SELECT country,name,house
+          FROM {c}
+          WHERE country<>'' AND name<>'' AND house<>''
+          GROUP BY country,name,house
+          HAVING count(*) <= {house_cap}
+        ),
+        postal_keys AS (
+          SELECT country,postal
+          FROM {c}
+          WHERE country<>'' AND postal<>''
+          GROUP BY country,postal
+          HAVING count(*) <= {postal_cap}
+        ),
+        blocks AS (
+          SELECT s.rid,c.gid,{BLOCKS['exact_name']} AS bit
+          FROM {s1} s
+          JOIN name_keys k ON s.country=k.country AND s.name=k.name
+          JOIN {c} c ON c.country=k.country AND c.name=k.name
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['exact_name_heavy']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name_heavy<>'' AND s.name_heavy=c.name_heavy
+          SELECT s.rid,c.gid,{BLOCKS['exact_name_heavy']} AS bit
+          FROM {s1} s
+          JOIN heavy_keys k ON s.country=k.country AND s.name_heavy=k.name_heavy
+          JOIN {c} c ON c.country=k.country AND c.name_heavy=k.name_heavy
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['core_name']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name_core<>'' AND s.name_core=c.name_core
+          SELECT s.rid,c.gid,{BLOCKS['core_name']} AS bit
+          FROM {s1} s
+          JOIN core_keys k ON s.country=k.country AND s.name_core=k.name_core
+          JOIN {c} c ON c.country=k.country AND c.name_core=k.name_core
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['exact_address']} FROM {s1} s JOIN {c} c
-            ON s.addr<>'' AND s.addr=c.addr
+          SELECT s.rid,c.gid,{BLOCKS['exact_address']} AS bit
+          FROM {s1} s
+          JOIN addr_keys k ON s.addr=k.addr
+          JOIN {c} c ON c.addr=k.addr
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['name_house']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name<>'' AND s.house<>'' AND s.name=c.name AND s.house=c.house
+          SELECT s.rid,c.gid,{BLOCKS['name_house']} AS bit
+          FROM {s1} s
+          JOIN house_keys k
+            ON s.country=k.country AND s.name=k.name AND s.house=k.house
+          JOIN {c} c
+            ON c.country=k.country AND c.name=k.name AND c.house=k.house
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['postal_name']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.postal<>'' AND s.postal=c.postal
-           AND (s.name='' OR jaro_winkler_similarity(s.name,c.name)>=0.50)
-          -- Prefix/fuzzy joins are intentionally excluded from the production
-          -- candidate stage. Common 3/4-character prefixes create enormous
-          -- intermediate joins and force large DuckDB spills before the
-          -- per-S1 candidate cap can be applied.
-
-        ), merged AS (
-          SELECT rid,gid,bit_or(bit) AS block_mask, count(*) AS block_count
+          SELECT s.rid,c.gid,{BLOCKS['postal_name']} AS bit
+          FROM {s1} s
+          JOIN postal_keys k ON s.country=k.country AND s.postal=k.postal
+          JOIN {c} c ON c.country=k.country AND c.postal=k.postal
+          WHERE s.name='' OR jaro_winkler_similarity(s.name,c.name)>=0.50
+        ),
+        merged AS (
+          SELECT rid,gid,bit_or(bit) AS block_mask,count(*) AS block_count
           FROM blocks GROUP BY rid,gid
-        ), ranked AS (
-          SELECT *, row_number() OVER(PARTITION BY rid ORDER BY block_count DESC, block_mask DESC, gid) rn
+        ),
+        ranked AS (
+          SELECT *,row_number() OVER(
+            PARTITION BY rid ORDER BY block_count DESC,block_mask DESC,gid
+          ) rn
           FROM merged
         )
         SELECT rid,gid,block_mask,block_count
-        FROM ranked WHERE rn<={cap}
+        FROM ranked
+        WHERE rn<={cap}
         ORDER BY rid,gid
         """
 
