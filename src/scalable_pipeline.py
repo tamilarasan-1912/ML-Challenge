@@ -151,29 +151,22 @@ class ScalableER:
         cap=self.max_candidates
         return f"""
         WITH blocks AS (
-          SELECT s.rid, c.gid, {BLOCKS['exact_name']} AS bit
-          FROM {s1} s JOIN {c} c ON s.country=c.country AND s.name<>'' AND s.name=c.name
+          -- Production candidate generation is deliberately restricted to
+          -- highly selective structural blocks. Broad normalized/core/postal
+          -- joins can create enormous intermediate relations before DuckDB
+          -- applies the final per-entity cap.
+          SELECT s.rid,c.gid, {BLOCKS['exact_name']} AS bit
+          FROM {s1} s JOIN {c} c
+            ON s.country=c.country AND s.name<>'' AND s.name=c.name
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['exact_name_heavy']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name_heavy<>'' AND s.name_heavy=c.name_heavy
-          UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['core_name']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name_core<>'' AND s.name_core=c.name_core
-          UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['exact_address']} FROM {s1} s JOIN {c} c
+          SELECT s.rid,c.gid,{BLOCKS['exact_address']} AS bit
+          FROM {s1} s JOIN {c} c
             ON s.addr<>'' AND s.addr=c.addr
           UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['name_house']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.name<>'' AND s.house<>'' AND s.name=c.name AND s.house=c.house
-          UNION ALL
-          SELECT s.rid,c.gid,{BLOCKS['postal_name']} FROM {s1} s JOIN {c} c
-            ON s.country=c.country AND s.postal<>'' AND s.postal=c.postal
-           AND (s.name='' OR jaro_winkler_similarity(s.name,c.name)>=0.50)
-          -- Prefix/fuzzy joins are intentionally excluded from the production
-          -- candidate stage. Common 3/4-character prefixes create enormous
-          -- intermediate joins and force large DuckDB spills before the
-          -- per-S1 candidate cap can be applied.
-
+          SELECT s.rid,c.gid,{BLOCKS['name_house']} AS bit
+          FROM {s1} s JOIN {c} c
+            ON s.country=c.country AND s.name<>'' AND s.house<>'' 
+           AND s.name=c.name AND s.house=c.house
         ), merged AS (
           SELECT rid,gid,bit_or(bit) AS block_mask, count(*) AS block_count
           FROM blocks GROUP BY rid,gid
