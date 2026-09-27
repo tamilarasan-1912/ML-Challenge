@@ -290,7 +290,7 @@ class ScalableER:
             self.con.execute("CREATE TEMP TABLE selected_rids(rid BIGINT)")
             self.con.executemany("INSERT INTO selected_rids VALUES (?)", [(int(x[0]),) for x in chunk])
             self.con.execute("CREATE OR REPLACE TEMP TABLE s1_batch AS SELECT * FROM tr_s1 WHERE rid IN (SELECT rid FROM selected_rids)")
-            cand=self.con.execute(self._candidate_sql("tr_s1").replace("tr_s1 s","s1_batch s")).pl()
+            cand=self.con.execute(self._candidate_sql("tr").replace("tr_s1 s","s1_batch s")).pl()
             # Guarantee known positives are in the training candidate set.
             ids=[x[1] for x in chunk]
             posdf=self.con.execute("""
