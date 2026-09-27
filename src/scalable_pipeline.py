@@ -132,6 +132,7 @@ class ScalableER:
             self.con.execute(_prep_sql("tr_s3", str(self.paths.train["S3"])))
             self.con.execute("CREATE OR REPLACE TABLE tr_s3x AS SELECT row_number() OVER()-1 + (SELECT count(*) FROM tr_s2) AS gid, 'S3' AS source, * FROM tr_s3")
             self.con.execute("CREATE OR REPLACE TABLE tr_cand AS SELECT * FROM tr_s2 UNION ALL SELECT * FROM tr_s3x")
+            self._materialize_block_keys("tr")
             self.con.execute("CREATE OR REPLACE TABLE tr_gt AS SELECT source1_entity_id::VARCHAR AS s1_id, matched_entity_ids::VARCHAR AS mids FROM read_csv_auto(?, delim='\\t', header=true, all_varchar=true)", [str(self.paths.train_gt)])
             self.con.execute("ANALYZE tr_cand")
             self.con.execute("ANALYZE tr_s1")
@@ -142,114 +143,107 @@ class ScalableER:
             self.con.execute(_prep_sql("te_s3", str(self.paths.test["S3"])))
             self.con.execute("CREATE OR REPLACE TABLE te_s3x AS SELECT row_number() OVER()-1 + (SELECT count(*) FROM te_s2) AS gid, 'S3' AS source, * FROM te_s3")
             self.con.execute("CREATE OR REPLACE TABLE te_cand AS SELECT * FROM te_s2 UNION ALL SELECT * FROM te_s3x")
+            self._materialize_block_keys("te")
             self.con.execute("ANALYZE te_cand")
             self.con.execute("ANALYZE te_s1")
         LOG.info("DuckDB preparation completed in %s", human_seconds(time.perf_counter()-t))
 
+    def _materialize_block_keys(self, prefix: str) -> None:
+        """Build bounded inverted-key tables once per split.
+        
+        The raw candidate table can contain very common names/addresses. Joining
+        an S1 batch directly to those keys creates a Cartesian-like intermediate
+        relation before the final candidate cap. These tables discard only keys
+        whose posting lists exceed the configured safety caps, so every batch
+        join has a bounded posting list.
+        """
+        c=f"{prefix}_cand"
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_name_keys AS
+            SELECT country,name
+            FROM {c}
+            WHERE country<>'' AND name<>''
+            GROUP BY country,name
+            HAVING count(*) <= 200""")
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_heavy_keys AS
+            SELECT country,name_heavy
+            FROM {c}
+            WHERE country<>'' AND name_heavy<>''
+            GROUP BY country,name_heavy
+            HAVING count(*) <= 200""")
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_core_keys AS
+            SELECT country,name_core
+            FROM {c}
+            WHERE country<>'' AND name_core<>''
+            GROUP BY country,name_core
+            HAVING count(*) <= 200""")
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_addr_keys AS
+            SELECT addr
+            FROM {c}
+            WHERE addr<>''
+            GROUP BY addr
+            HAVING count(*) <= 200""")
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_house_keys AS
+            SELECT country,name,house
+            FROM {c}
+            WHERE country<>'' AND name<>'' AND house<>''
+            GROUP BY country,name,house
+            HAVING count(*) <= 100""")
+        self.con.execute(f"""CREATE OR REPLACE TABLE {prefix}_postal_keys AS
+            SELECT country,postal
+            FROM {c}
+            WHERE country<>'' AND postal<>''
+            GROUP BY country,postal
+            HAVING count(*) <= 200""")
+        LOG.info("%s bounded blocking indexes materialized", prefix)
+
     def _candidate_sql(self, prefix: str) -> str:
         s1=f"{prefix}_s1"; c=f"{prefix}_cand"
         cap=self.max_candidates
-        # IMPORTANT: never join a batch directly to a high-frequency key.
-        # The eligible-key subqueries are GROUP BY/HAVING filters over the
-        # candidate table, so each surviving blocking key has a hard posting
-        # bound before it participates in the S1 x candidate join.
-        name_cap=200
-        heavy_cap=200
-        core_cap=200
-        addr_cap=200
-        house_cap=100
-        postal_cap=200
         return f"""
-        WITH
-        name_keys AS (
-          SELECT country,name
-          FROM {c}
-          WHERE country<>'' AND name<>''
-          GROUP BY country,name
-          HAVING count(*) <= {name_cap}
-        ),
-        heavy_keys AS (
-          SELECT country,name_heavy
-          FROM {c}
-          WHERE country<>'' AND name_heavy<>''
-          GROUP BY country,name_heavy
-          HAVING count(*) <= {heavy_cap}
-        ),
-        core_keys AS (
-          SELECT country,name_core
-          FROM {c}
-          WHERE country<>'' AND name_core<>''
-          GROUP BY country,name_core
-          HAVING count(*) <= {core_cap}
-        ),
-        addr_keys AS (
-          SELECT addr
-          FROM {c}
-          WHERE addr<>''
-          GROUP BY addr
-          HAVING count(*) <= {addr_cap}
-        ),
-        house_keys AS (
-          SELECT country,name,house
-          FROM {c}
-          WHERE country<>'' AND name<>'' AND house<>''
-          GROUP BY country,name,house
-          HAVING count(*) <= {house_cap}
-        ),
-        postal_keys AS (
-          SELECT country,postal
-          FROM {c}
-          WHERE country<>'' AND postal<>''
-          GROUP BY country,postal
-          HAVING count(*) <= {postal_cap}
-        ),
-        blocks AS (
+        WITH blocks AS (
           SELECT s.rid,c.gid,{BLOCKS['exact_name']} AS bit
           FROM {s1} s
-          JOIN name_keys k ON s.country=k.country AND s.name=k.name
+          JOIN {prefix}_name_keys k ON s.country=k.country AND s.name=k.name
           JOIN {c} c ON c.country=k.country AND c.name=k.name
           UNION ALL
           SELECT s.rid,c.gid,{BLOCKS['exact_name_heavy']} AS bit
           FROM {s1} s
-          JOIN heavy_keys k ON s.country=k.country AND s.name_heavy=k.name_heavy
+          JOIN {prefix}_heavy_keys k ON s.country=k.country AND s.name_heavy=k.name_heavy
           JOIN {c} c ON c.country=k.country AND c.name_heavy=k.name_heavy
           UNION ALL
           SELECT s.rid,c.gid,{BLOCKS['core_name']} AS bit
           FROM {s1} s
-          JOIN core_keys k ON s.country=k.country AND s.name_core=k.name_core
+          JOIN {prefix}_core_keys k ON s.country=k.country AND s.name_core=k.name_core
           JOIN {c} c ON c.country=k.country AND c.name_core=k.name_core
           UNION ALL
           SELECT s.rid,c.gid,{BLOCKS['exact_address']} AS bit
           FROM {s1} s
-          JOIN addr_keys k ON s.addr=k.addr
+          JOIN {prefix}_addr_keys k ON s.addr=k.addr
           JOIN {c} c ON c.addr=k.addr
           UNION ALL
           SELECT s.rid,c.gid,{BLOCKS['name_house']} AS bit
           FROM {s1} s
-          JOIN house_keys k
+          JOIN {prefix}_house_keys k
             ON s.country=k.country AND s.name=k.name AND s.house=k.house
           JOIN {c} c
             ON c.country=k.country AND c.name=k.name AND c.house=k.house
           UNION ALL
           SELECT s.rid,c.gid,{BLOCKS['postal_name']} AS bit
           FROM {s1} s
-          JOIN postal_keys k ON s.country=k.country AND s.postal=k.postal
+          JOIN {prefix}_postal_keys k ON s.country=k.country AND s.postal=k.postal
           JOIN {c} c ON c.country=k.country AND c.postal=k.postal
           WHERE s.name='' OR jaro_winkler_similarity(s.name,c.name)>=0.50
-        ),
-        merged AS (
+        ), merged AS (
           SELECT rid,gid,bit_or(bit) AS block_mask,count(*) AS block_count
           FROM blocks GROUP BY rid,gid
-        ),
-        ranked AS (
+        ), ranked AS (
           SELECT *,row_number() OVER(
             PARTITION BY rid ORDER BY block_count DESC,block_mask DESC,gid
           ) rn
           FROM merged
         )
         SELECT rid,gid,block_mask,block_count
-        FROM ranked
-        WHERE rn<={cap}
+        FROM ranked WHERE rn<={cap}
         ORDER BY rid,gid
         """
 
