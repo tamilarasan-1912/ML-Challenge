@@ -107,9 +107,11 @@ class ScalableER:
         self.train_entities = int(stream.get("training_entities", 100000))
         self.val_entities = int(stream.get("validation_entities", 20000))
         self.seed = int(cfg.seed)
-        self.con.execute("SET threads TO ?", [max(1, min(os.cpu_count() or 4, 8))])
+        self.con.execute("SET threads TO 4")
+        self.con.execute("SET preserve_insertion_order=false")
         self.con.execute("SET memory_limit='24GB'")
         self.con.execute("SET temp_directory=?", [str(self.db_path.parent / "duckdb_tmp")])
+        self.con.execute("SET max_temp_directory_size='30GiB'")
         ensure_dir(self.db_path.parent / "duckdb_tmp")
 
     def close(self):
