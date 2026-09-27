@@ -347,7 +347,7 @@ class ScalableER:
             # Guarantee known positives are in the training candidate set.
             ids=[x[1] for x in chunk]
             posdf=self.con.execute("""
-              SELECT s.rid,c.gid,0::UBIGINT block_mask,0::BIGINT block_count
+              SELECT s.rid,c.gid,0::INTEGER block_mask,0::BIGINT block_count
               FROM s1_batch s JOIN tr_gt g ON s.entity_id=g.s1_id
               CROSS JOIN LATERAL unnest(string_split(coalesce(g.mids,''),',')) m(mid)
               JOIN tr_cand c ON trim(m.mid)=c.entity_id
