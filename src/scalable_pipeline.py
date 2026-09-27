@@ -350,7 +350,22 @@ class ScalableER:
         return X,y,df
 
     def train(self) -> dict:
-        self.prepare(train=True,test=False)
+        required_tables = [
+            "tr_s1","tr_cand","tr_gt",
+            "tr_name_keys","tr_heavy_keys","tr_core_keys",
+            "tr_addr_keys","tr_house_keys","tr_postal_keys",
+        ]
+        existing = {
+            name: self.con.execute(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?",
+                [name],
+            ).fetchone()[0] > 0
+            for name in required_tables
+        }
+        if not all(existing.values()):
+            self.prepare(train=True,test=False)
+        else:
+            LOG.info("Reusing existing prepared training DuckDB; skipping rebuild.")
         sample=self._select_s1("tr_s1", self.train_entities+self.val_entities)
         rng=np.random.default_rng(self.seed); rng.shuffle(sample)
         ntr=int(len(sample)*0.8)
@@ -416,12 +431,32 @@ class ScalableER:
         cap=min(len(neg_idx),max(len(pos_idx)*20,10000))
         if len(neg_idx)>cap: neg_idx=rng.choice(neg_idx,size=cap,replace=False)
         keep=np.concatenate([pos_idx,neg_idx]); rng.shuffle(keep)
+        train_cfg = self.cfg.section("training")
         model=lgb.LGBMClassifier(
-            objective="binary",n_estimators=2500,num_leaves=96,learning_rate=0.05,
-            min_child_samples=30,subsample=0.9,colsample_bytree=0.9,
-            reg_alpha=0.1,reg_lambda=1.0,random_state=self.seed,n_jobs=-1
+            objective="binary",
+            n_estimators=int(train_cfg.get("n_estimators", 1200)),
+            num_leaves=int(train_cfg.get("num_leaves", 64)),
+            max_depth=int(train_cfg.get("max_depth", -1)),
+            learning_rate=float(train_cfg.get("learning_rate", 0.05)),
+            min_child_samples=int(train_cfg.get("min_child_samples", 30)),
+            subsample=float(train_cfg.get("subsample", 0.9)),
+            subsample_freq=int(train_cfg.get("subsample_freq", 1)),
+            colsample_bytree=float(train_cfg.get("colsample_bytree", 0.9)),
+            reg_alpha=float(train_cfg.get("reg_alpha", 0.1)),
+            reg_lambda=float(train_cfg.get("reg_lambda", 1.0)),
+            random_state=self.seed,
+            n_jobs=int(train_cfg.get("n_jobs", -1)),
+            verbosity=-1,
         )
-        model.fit(Xtr[keep],ytr[keep],eval_set=[(Xva,yva)],callbacks=[lgb.early_stopping(150,verbose=False)])
+        early_stop = int(train_cfg.get("early_stopping_rounds", 75))
+        model.fit(
+            Xtr[keep], ytr[keep],
+            eval_set=[(Xva,yva)],
+            callbacks=[
+                lgb.early_stopping(early_stop, verbose=True),
+                lgb.log_evaluation(25),
+            ],
+        )
         pva=model.predict_proba(Xva)[:,1]
         # entity-level threshold selection, including empty predictions.
         val_sid=val_df["s1_id"].to_list(); val_eid=val_df["entity_id"].to_list()
