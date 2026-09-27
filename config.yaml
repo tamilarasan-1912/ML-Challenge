@@ -45,8 +45,8 @@ streaming:
   use_duckdb: true           # use disk-backed indexes
   release_memory: true       # explicitly release between batches
   block_recall_sample: 0     # legacy diagnostic disabled; scalable engine reports raw recall on its sample
-  training_entities: 60000   # bounded entity sample used for pair-model training
-  validation_entities: 10000  # bounded held-out entity sample for threshold selection
+  training_entities: 45000   # bounded entity sample used for pair-model training
+  validation_entities: 5000  # bounded held-out entity sample for threshold selection
 
 hard_negative_mining:
   keep_very_hard: true
@@ -56,17 +56,17 @@ hard_negative_mining:
   easy_sample_rate: 0.05
 
 training:
-  num_leaves: 96
+  num_leaves: 64
   max_depth: -1
   learning_rate: 0.05
-  n_estimators: 3000
-  min_child_samples: 20
+  n_estimators: 900
+  min_child_samples: 30
   subsample: 0.9
   subsample_freq: 1
   colsample_bytree: 0.9
   reg_alpha: 0.1
   reg_lambda: 1.0
-  early_stopping_rounds: 150
+  early_stopping_rounds: 60
   n_jobs: -1
 
 tuning:
