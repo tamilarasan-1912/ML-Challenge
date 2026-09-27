@@ -48,7 +48,7 @@ def _norm_expr(col: str) -> str:
     return (
         "regexp_replace("
         "lower(strip_accents(coalesce(" + col + ",'')::VARCHAR)),"
-        "'[^\\\\p{L}\\\\p{N}]+',' ','g')"
+        "'[^\\p{L}\\p{N}]+',' ','g')"
     )
 
 def _heavy_expr(col: str) -> str:
@@ -62,11 +62,11 @@ def _heavy_expr(col: str) -> str:
 
 def _core_expr(col: str) -> str:
     x = _heavy_expr(col)
-    return "trim(regexp_replace(" + x + ", '\\\\b(ltd|limited|llc|inc|corp|corporation|company|co|pvt|private|plc|llp)\\\\b',' ','g'))"
+    return "trim(regexp_replace(" + x + ", '\\b(ltd|limited|llc|inc|corp|corporation|company|co|pvt|private|plc|llp)\\b',' ','g'))"
 
 def _addr_expr(col: str) -> str:
     x = _norm_expr(col)
-    return "trim(regexp_replace(" + x + ", '\\\\b(road|rd)\\\\b','rd','g'))"
+    return "trim(regexp_replace(" + x + ", '\\b(road|rd)\\b','rd','g'))"
 
 def _prep_sql(src: str, path: str, limit: int | None = None) -> str:
     lim = f" LIMIT {int(limit)}" if limit else ""
@@ -88,8 +88,8 @@ def _prep_sql(src: str, path: str, limit: int | None = None) -> str:
       lower(trim(coalesce(country,''))) AS country,
       left({_core_expr('business_name')},3) AS name_prefix,
       left({_addr_expr('business_address')},4) AS addr_prefix,
-      regexp_extract({_addr_expr('business_address')}, '(\\\\d{{1,6}})', 1) AS house,
-      regexp_extract({_addr_expr('business_address')}, '\\\\b(\\\\d{{5,6}})\\\\b', 1) AS postal
+      regexp_extract({_addr_expr('business_address')}, '(\\d{{1,6}})', 1) AS house,
+      regexp_extract({_addr_expr('business_address')}, '\\b(\\d{{5,6}})\\b', 1) AS postal
     FROM {src}_raw{lim};
     DROP TABLE {src}_raw;
     """
@@ -284,7 +284,7 @@ class ScalableER:
           b.block_mask,
           ((jaro_winkler_similarity(s.name,c.name)>=0.90 AND jaro_winkler_similarity(s.addr,c.addr)>=0.85))::INT high_name_high_addr,
           jaro_winkler_similarity(s.name,c.name)*jaro_winkler_similarity(s.addr,c.addr) name_addr_product,
-          (s.name<>' ' AND s.name<>'')::INT name_present,
+          (s.name<>'')::INT name_present,
           (s.addr<>' ' AND s.addr<>'')::INT addr_present,
           (c.source='S3')::INT source_is_s3
         FROM (
