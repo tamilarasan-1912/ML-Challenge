@@ -55,9 +55,9 @@ def _heavy_expr(col: str) -> str:
     x = _norm_expr(col)
     return (
         "trim(regexp_replace(regexp_replace(regexp_replace(" + x +
-        ",'\\\\bincorporated\\\\b','inc','g'),"
-        "'\\\\bcorporation\\\\b','corp','g'),"
-        "'\\\\blimited\\\\b','ltd','g'))"
+        ",'\bincorporated\b','inc','g'),
+        "'\bcorporation\b','corp','g'),
+        "'\blimited\b','ltd','g'))"
     )
 
 def _core_expr(col: str) -> str:
