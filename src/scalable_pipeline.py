@@ -55,9 +55,9 @@ def _heavy_expr(col: str) -> str:
     x = _norm_expr(col)
     return (
         "trim(regexp_replace(regexp_replace(regexp_replace(" + x +
-        ",'\\\\bincorporated\\\\b','inc','g'),
-        "'\\\\bcorporation\\\\b','corp','g'),
-        "'\\\\blimited\\\\b','ltd','g'))"
+        ",'\\bincorporated\\b','inc','g')," +
+        "'\\bcorporation\\b','corp','g')," +
+        "'\\blimited\\b','ltd','g'))"
     )
 
 def _core_expr(col: str) -> str:
@@ -67,7 +67,6 @@ def _core_expr(col: str) -> str:
 def _addr_expr(col: str) -> str:
     x = _norm_expr(col)
     return "trim(regexp_replace(" + x + ", '\\b(road|rd)\\b','rd','g'))"
-
 def _prep_sql(src: str, path: str, limit: int | None = None) -> str:
     lim = f" LIMIT {int(limit)}" if limit else ""
     return f"""
