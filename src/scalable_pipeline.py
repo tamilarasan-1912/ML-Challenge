@@ -6,7 +6,7 @@ features, predictions and submission rows are never accumulated for the full tes
 set in Python memory.
 """
 from __future__ import annotations
-import csv, json, math, os, time, pickle, subprocess, sys
+import csv, json, math, os, time, pickle, subprocess, sys, shutil
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -109,10 +109,13 @@ class ScalableER:
         self.seed = int(cfg.seed)
         self.con.execute("SET threads TO 4")
         self.con.execute("SET preserve_insertion_order=false")
-        self.con.execute("SET memory_limit='24GB'")
-        self.con.execute("SET temp_directory=?", [str(self.db_path.parent / "duckdb_tmp")])
-        self.con.execute("SET max_temp_directory_size='30GiB'")
-        ensure_dir(self.db_path.parent / "duckdb_tmp")
+        self.con.execute("SET memory_limit='20GB'")
+        tmp_dir = self.db_path.parent / "duckdb_tmp"
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        ensure_dir(tmp_dir)
+        self.con.execute("SET temp_directory=?", [str(tmp_dir)])
+        self.con.execute("SET max_temp_directory_size='10GiB'")
 
     def close(self):
         try: self.con.close()
@@ -166,22 +169,11 @@ class ScalableER:
           SELECT s.rid,c.gid,{BLOCKS['postal_name']} FROM {s1} s JOIN {c} c
             ON s.country=c.country AND s.postal<>'' AND s.postal=c.postal
            AND (s.name='' OR jaro_winkler_similarity(s.name,c.name)>=0.50)
-          UNION ALL
-          SELECT rid,gid,{BLOCKS['name_prefix_fuzzy']} FROM (
-            SELECT s.rid,c.gid,jaro_winkler_similarity(s.name,c.name) sim,
-                   row_number() OVER(PARTITION BY s.rid ORDER BY jaro_winkler_similarity(s.name,c.name) DESC) rn
-            FROM {s1} s JOIN {c} c
-              ON s.country=c.country AND s.name_prefix<>'' AND s.name_prefix=c.name_prefix
-             AND jaro_winkler_similarity(s.name,c.name)>=0.68
-          ) q WHERE rn<=100
-          UNION ALL
-          SELECT rid,gid,{BLOCKS['address_prefix_fuzzy']} FROM (
-            SELECT s.rid,c.gid,jaro_winkler_similarity(s.addr,c.addr) sim,
-                   row_number() OVER(PARTITION BY s.rid ORDER BY jaro_winkler_similarity(s.addr,c.addr) DESC) rn
-            FROM {s1} s JOIN {c} c
-              ON s.country=c.country AND s.addr_prefix<>'' AND s.addr_prefix=c.addr_prefix
-             AND jaro_winkler_similarity(s.addr,c.addr)>=0.62
-          ) q WHERE rn<=100
+          -- Prefix/fuzzy joins are intentionally excluded from the production
+          -- candidate stage. Common 3/4-character prefixes create enormous
+          -- intermediate joins and force large DuckDB spills before the
+          -- per-S1 candidate cap can be applied.
+
         ), merged AS (
           SELECT rid,gid,bit_or(bit) AS block_mask, count(*) AS block_count
           FROM blocks GROUP BY rid,gid
