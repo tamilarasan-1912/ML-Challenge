@@ -236,9 +236,20 @@ class ScalableER:
           SELECT rid,gid,bit_or(bit) AS block_mask,count(*) AS block_count
           FROM blocks GROUP BY rid,gid
         ), ranked AS (
-          SELECT *,row_number() OVER(
-            PARTITION BY rid ORDER BY block_count DESC,block_mask DESC,gid
-          ) rn
+          SELECT *,
+            row_number() OVER(
+              PARTITION BY rid
+              ORDER BY
+                CASE WHEN (block_mask & 1) != 0 THEN 1 ELSE 0 END DESC,
+                CASE WHEN (block_mask & 2) != 0 THEN 1 ELSE 0 END DESC,
+                CASE WHEN (block_mask & 4) != 0 THEN 1 ELSE 0 END DESC,
+                CASE WHEN (block_mask & 8) != 0 THEN 1 ELSE 0 END DESC,
+                CASE WHEN (block_mask & 16) != 0 THEN 1 ELSE 0 END DESC,
+                CASE WHEN (block_mask & 32) != 0 THEN 1 ELSE 0 END DESC,
+                block_count DESC,
+                block_mask DESC,
+                gid
+            ) rn
           FROM merged
         )
         SELECT rid,gid,block_mask,block_count
