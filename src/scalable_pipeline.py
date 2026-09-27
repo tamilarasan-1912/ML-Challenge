@@ -266,7 +266,7 @@ class ScalableER:
           1.0-(levenshtein(s.name,c.name)::DOUBLE/GREATEST(length(s.name),length(c.name),1)) name_lev_ratio,
           CASE WHEN s.name='' OR c.name='' THEN 0.0
                ELSE length(list_intersect(string_split(s.name,' '),string_split(c.name,' ')))::DOUBLE/
-                    GREATEST(length(list_unique(string_split(s.name,' '))),1) END name_token_jaccard,
+                    GREATEST(list_unique(string_split(s.name,' ')),1) END name_token_jaccard,
           jaro_winkler_similarity(s.name,c.name) name_partial,
           LEAST(length(s.name),length(c.name))::DOUBLE/GREATEST(length(s.name),length(c.name),1) name_len_ratio,
           (s.addr<>'' AND s.addr=c.addr)::INT addr_exact,
@@ -274,7 +274,7 @@ class ScalableER:
           1.0-(levenshtein(s.addr,c.addr)::DOUBLE/GREATEST(length(s.addr),length(c.addr),1)) addr_lev_ratio,
           CASE WHEN s.addr='' OR c.addr='' THEN 0.0
                ELSE length(list_intersect(string_split(s.addr,' '),string_split(c.addr,' ')))::DOUBLE/
-                    GREATEST(length(list_unique(string_split(s.addr,' '))),1) END addr_token_jaccard,
+                    GREATEST(list_unique(string_split(s.addr,' ')),1) END addr_token_jaccard,
           LEAST(length(s.addr),length(c.addr))::DOUBLE/GREATEST(length(s.addr),length(c.addr),1) addr_len_ratio,
           (s.house<>'' AND s.house=c.house)::INT house_match,
           (s.postal<>'' AND s.postal=c.postal)::INT postal_match,
