@@ -287,8 +287,31 @@ class ScalableER:
           (s.name<>' ' AND s.name<>'')::INT name_present,
           (s.addr<>' ' AND s.addr<>'')::INT addr_present,
           (c.source='S3')::INT source_is_s3
-        FROM s1_batch s JOIN candidate_batch b ON s.rid=b.rid
-        JOIN {c} c ON b.gid=c.gid
+        FROM (
+          SELECT
+            * EXCLUDE(name,name_heavy,name_core,addr,country,house,postal),
+            CAST(name AS VARCHAR) AS name,
+            CAST(name_heavy AS VARCHAR) AS name_heavy,
+            CAST(name_core AS VARCHAR) AS name_core,
+            CAST(addr AS VARCHAR) AS addr,
+            CAST(country AS VARCHAR) AS country,
+            CAST(house AS VARCHAR) AS house,
+            CAST(postal AS VARCHAR) AS postal
+          FROM s1_batch
+        ) s
+        JOIN candidate_batch b ON s.rid=b.rid
+        JOIN (
+          SELECT
+            * EXCLUDE(name,name_heavy,name_core,addr,country,house,postal),
+            CAST(name AS VARCHAR) AS name,
+            CAST(name_heavy AS VARCHAR) AS name_heavy,
+            CAST(name_core AS VARCHAR) AS name_core,
+            CAST(addr AS VARCHAR) AS addr,
+            CAST(country AS VARCHAR) AS country,
+            CAST(house AS VARCHAR) AS house,
+            CAST(postal AS VARCHAR) AS postal
+          FROM {c}
+        ) c ON b.gid=c.gid
         """
 
     def feature_rows(self, prefix: str, cand: pl.DataFrame) -> pl.DataFrame:
