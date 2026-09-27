@@ -256,7 +256,7 @@ class ScalableER:
         c=f"{prefix}_cand"
         return f"""
         SELECT
-          b.rid,b.gid,c.entity_id,c.source,
+          b.rid,b.gid,s.entity_id AS s1_id,c.entity_id,c.source,
           b.block_mask,b.block_count,
           (s.name<>'' AND s.name=c.name)::INT name_exact,
           (s.name_heavy<>'' AND s.name_heavy=c.name_heavy)::INT name_heavy_exact,
