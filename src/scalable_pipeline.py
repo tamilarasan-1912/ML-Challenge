@@ -458,17 +458,33 @@ class ScalableER:
             ],
         )
         pva=model.predict_proba(Xva)[:,1]
-        # entity-level threshold selection, including empty predictions.
-        val_sid=val_df["s1_id"].to_list(); val_eid=val_df["entity_id"].to_list()
-        best=(0.0,0.5)
-        for t in np.linspace(0.50,0.995,100):
+        # Entity-level threshold selection. IMPORTANT: include every validation
+        # S1 entity, including entities with zero candidates / zero true matches.
+        # The previous implementation only scored entities appearing in val_df,
+        # which could hide false positives on no-match entities and select a
+        # threshold that was too permissive for the precision-heavy F0.5 metric.
+        val_sid=val_df["s1_id"].to_list()
+        val_eid=val_df["entity_id"].to_list()
+        score_by_sid={}
+        for sid,eid,p in zip(val_sid,val_eid,pva):
+            score_by_sid.setdefault(sid,[]).append((eid,float(p)))
+
+        val_all_ids=[x[1] for x in val_sample]
+        best=(-1.0,0.99)
+        threshold_grid=np.unique(np.concatenate([
+            np.linspace(0.50,0.99,50),
+            np.linspace(0.991,0.999,17),
+            np.array([0.9992,0.9995,0.9997,0.9999]),
+        ]))
+        for t in threshold_grid:
             scores=[]
-            for sid in set(val_sid):
+            for sid in val_all_ids:
                 gt=gt_by_id.get(sid,set())
-                pred={eid for eid,p in zip([e for s,e in zip(val_sid,val_eid) if s==sid],[q for s,q in zip(val_sid,pva) if s==sid]) if p>=t}
+                pred={eid for eid,p in score_by_sid.get(sid,[]) if p>=float(t)}
                 scores.append(entity_f05(gt,pred))
             sc=float(np.mean(scores)) if scores else 0.0
-            if sc>best[0]: best=(sc,float(t))
+            if sc>best[0]:
+                best=(sc,float(t))
         ensure_dir(self.cfg.models_dir)
         model.booster_.save_model(str(self.cfg.models_dir/"lgbm_pair_model.txt"))
         bundle={"feature_names":FEATURE_NAMES,"decision":{"threshold":best[1],"threshold_s2":None,"threshold_s3":None,"high_conf":0.999,"margin":0.0,"top_only":False,"max_matches_per_entity":0},"candidate_cap":self.max_candidates,"train_entities":len(train_sample),"validation_entities":len(val_sample),"metrics":{"macro_f05":best[0]},"engine":"duckdb_streaming_v1","model_license":"MIT"}
